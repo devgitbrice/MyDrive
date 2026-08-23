@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ChatBot from "@/components/ChatBot";
 import TaskManager from "@/components/TaskManager";
+import ClaudeButton from "@/components/ClaudeButton";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,6 +33,7 @@ export default function RootLayout({
         {children}
         <ChatBot />
         <TaskManager />
+        <ClaudeButton />
       </body>
     </html>
   );
