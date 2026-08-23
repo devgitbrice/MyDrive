@@ -88,6 +88,19 @@ export default function DocEditor({ allTags: initialAllTags, initialData }: DocE
     };
   }, []);
 
+  // Toggle body class so global CSS can hide floating widgets in zen mode
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (chromeVisible) {
+      document.body.classList.remove("doc-zen-active");
+    } else {
+      document.body.classList.add("doc-zen-active");
+    }
+    return () => {
+      document.body.classList.remove("doc-zen-active");
+    };
+  }, [chromeVisible]);
+
   const handleTitleChange = (val: string) => {
     setTitle(val);
     scheduleAutoSave(val, contentRef.current, observation);
