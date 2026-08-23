@@ -118,7 +118,7 @@ export default function DocEditor({ allTags: initialAllTags, initialData }: DocE
       </div>
 
       {/* Le composant est posé directement, la div buggée a disparu ! */}
-      <BlockManager initialHtml={initialData.content} tocOpen={tocOpen} onChange={handleContentChange} />
+      <BlockManager initialHtml={initialData.content} tocOpen={tocOpen} onChange={handleContentChange} chromeVisible={chromeVisible} />
 
       {/* Tags panel — always visible on desktop, toggle on mobile */}
       <div className={`${light ? "bg-neutral-100 border-neutral-300" : "bg-neutral-900 border-neutral-800"} border-t shrink-0 ${chromeClass}`}>
