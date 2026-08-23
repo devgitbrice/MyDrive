@@ -40,3 +40,13 @@ a {
 .dark-editor-override [style*="color"] {
   color: inherit !important;
 }
+
+/* Vue épurée : masque les widgets flottants (ChatBot, TaskManager) */
+body.doc-zen-active .fixed.bottom-6.right-6,
+body.doc-zen-active .fixed.bottom-6.right-24,
+body.doc-zen-active .fixed.bottom-24.right-6,
+body.doc-zen-active .fixed.bottom-24.right-24 {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 500ms;
+}
