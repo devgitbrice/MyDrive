@@ -12,6 +12,10 @@ import PendingCard from "./PendingCard";
 
 const UNFILED = "__unfiled__";
 
+// Comparateur ascendant par titre, tolérant les numéros ("01" < "02" < "10")
+const byTitleAsc = (a: MyDriveItem, b: MyDriveItem) =>
+  (a.title || "").localeCompare(b.title || "", "fr", { numeric: true, sensitivity: "base" });
+
 interface Props {
   items: MyDriveItem[];
   allTags: Tag[];
@@ -28,7 +32,6 @@ export default function FolderView({ items, allTags }: Props) {
   const [dragOverId, setDragOverId] = useState<string | null | "__ROOT__">(null);
   const [moveTarget, setMoveTarget] = useState<MyDriveItem | null>(null);
 
-  // --- Rafraîchissement automatique (debounced) ---
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleRefresh = () => {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
@@ -79,7 +82,10 @@ export default function FolderView({ items, allTags }: Props) {
     return () => window.removeEventListener("mydrive-request-move", handler);
   }, [items]);
 
-  const allFolders = useMemo(() => items.filter((i: any) => i.type === "folder"), [items]);
+  const allFolders = useMemo(
+    () => items.filter((i: any) => i.type === "folder").slice().sort(byTitleAsc),
+    [items]
+  );
   const foldersById = useMemo(() => {
     const m = new Map<string, MyDriveItem>();
     allFolders.forEach((f) => m.set(f.id, f));
@@ -103,12 +109,11 @@ export default function FolderView({ items, allTags }: Props) {
 
   const currentSubfolders = useMemo<MyDriveItem[]>(() => {
     if (folderId === UNFILED) return [];
-    return items.filter(
-      (i: any) => i.type === "folder" && (i.parent_id ?? null) === (folderId ?? null)
-    );
+    return items
+      .filter((i: any) => i.type === "folder" && (i.parent_id ?? null) === (folderId ?? null))
+      .sort(byTitleAsc);
   }, [items, folderId]);
 
-  // Docs du dossier courant, séparés en 2 : pending (placeholders) et normal
   const { currentPendingDocs, currentNormalDocs } = useMemo(() => {
     if (folderId === null) return { currentPendingDocs: [], currentNormalDocs: [] };
     const target = folderId === UNFILED ? null : folderId;
@@ -120,7 +125,10 @@ export default function FolderView({ items, allTags }: Props) {
       if (i.type === "pending") pending.push(i);
       else normal.push(i);
     });
-    return { currentPendingDocs: pending, currentNormalDocs: normal };
+    return {
+      currentPendingDocs: pending.sort(byTitleAsc),
+      currentNormalDocs: normal.sort(byTitleAsc),
+    };
   }, [items, folderId]);
 
   const unfiledCount = useMemo(
@@ -309,7 +317,6 @@ export default function FolderView({ items, allTags }: Props) {
         </div>
       )}
 
-      {/* Documents en attente (placeholders d'upload) */}
       {folderId !== null && currentPendingDocs.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-xs uppercase tracking-wider font-bold text-amber-400/80">
@@ -323,7 +330,6 @@ export default function FolderView({ items, allTags }: Props) {
         </div>
       )}
 
-      {/* Documents normaux */}
       {folderId !== null && currentNormalDocs.length > 0 && (
         <MyDriveGallery items={currentNormalDocs} allTags={allTags} />
       )}
