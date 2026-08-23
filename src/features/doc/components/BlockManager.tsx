@@ -11,9 +11,10 @@ interface BlockManagerProps {
   initialHtml: string;
   tocOpen: boolean;
   onChange: (html: string) => void;
+  chromeVisible?: boolean;
 }
 
-export default function BlockManager({ initialHtml, tocOpen, onChange }: BlockManagerProps) {
+export default function BlockManager({ initialHtml, tocOpen, onChange, chromeVisible = true }: BlockManagerProps) {
   const [tocEntries, setTocEntries] = useState<TocEntry[]>([]);
   const tocTimeout = useRef<NodeJS.Timeout | null>(null);
   const saveRef = useRef<() => void>(() => {});
@@ -145,7 +146,7 @@ export default function BlockManager({ initialHtml, tocOpen, onChange }: BlockMa
               onDelete={handleDelete}
             />
           ))}
-          <div className="mt-8 flex justify-center opacity-50 hover:opacity-100 transition-opacity">
+          <div className={`mt-8 flex justify-center opacity-50 hover:opacity-100 transition-opacity duration-500 ${chromeVisible ? "" : "!opacity-0 pointer-events-none"}`}>
             <button onClick={handleAddAtEnd} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors border ${light ? "bg-neutral-100 hover:bg-neutral-200 text-neutral-600 hover:text-neutral-900 border-neutral-300" : "bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border-neutral-700"}`}>
               <Plus size={20} />
               <span className="text-sm font-medium">Ajouter un bloc</span>
