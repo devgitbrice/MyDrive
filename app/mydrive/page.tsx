@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Settings } from "lucide-react";
+import { Settings, Plus } from "lucide-react";
 import { fetchMyDrive, fetchAllTags } from "@/features/mydrive/lib/fetchMyDrive";
 import MyDriveGallery from "@/features/mydrive/components/MyDriveGallery";
 import CreateVoyageButton from "@/features/voyage/components/CreateVoyageButton";
@@ -24,24 +24,24 @@ export default async function MyDrivePage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Link href="/newdoc" className="rounded-2xl px-4 py-2 text-sm font-semibold border border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white transition-colors">
-            Créer Doc
+          <Link href="/newdoc" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white transition-colors">
+            <Plus size={16} /> Doc
           </Link>
-          <Link href="/newpython" className="rounded-2xl px-4 py-2 text-sm font-semibold border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors">
-            Script Python
+          <Link href="/newpython" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors">
+            <Plus size={16} /> Python
           </Link>
-          <Link href="/newmindmap" className="rounded-2xl px-4 py-2 text-sm font-semibold border border-purple-600 text-purple-400 hover:bg-purple-600 hover:text-white transition-colors">
-            Créer Mindmap
+          <Link href="/newmindmap" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border border-purple-600 text-purple-400 hover:bg-purple-600 hover:text-white transition-colors">
+            <Plus size={16} /> Mindmap
           </Link>
-          <Link href="/newtable" className="rounded-2xl px-4 py-2 text-sm font-semibold border border-green-600 text-green-400 hover:bg-green-600 hover:text-white transition-colors">
-            Créer Table
+          <Link href="/newtable" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border border-green-600 text-green-400 hover:bg-green-600 hover:text-white transition-colors">
+            <Plus size={16} /> Table
           </Link>
-          <Link href="/newpresentation" className="rounded-2xl px-4 py-2 text-sm font-semibold border border-orange-600 text-orange-400 hover:bg-orange-600 hover:text-white transition-colors">
-            Créer Présentation
+          <Link href="/newpresentation" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border border-orange-600 text-orange-400 hover:bg-orange-600 hover:text-white transition-colors">
+            <Plus size={16} /> Présentation
           </Link>
           <CreateVoyageButton />
-          <Link href="/" className="rounded-2xl px-4 py-2 text-sm font-semibold border hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors">
-            Ajouter
+          <Link href="/add" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors">
+            <Plus size={16} /> Fichier
           </Link>
 
           {/* Nouveaux boutons (non cliquables pour l'instant) */}
@@ -67,20 +67,20 @@ export default async function MyDrivePage() {
         <div className="text-center space-y-4 opacity-80 mt-10">
           <p>Aucun document pour le moment.</p>
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <Link href="/newdoc" className="rounded-2xl px-6 py-3 font-semibold border border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white transition-colors">
-              Créer Doc
+            <Link href="/newdoc" className="inline-flex items-center gap-1.5 rounded-2xl px-6 py-3 font-semibold border border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white transition-colors">
+              <Plus size={18} /> Doc
             </Link>
-            <Link href="/newpython" className="rounded-2xl px-6 py-3 font-semibold border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors">
-              Script Python
+            <Link href="/newpython" className="inline-flex items-center gap-1.5 rounded-2xl px-6 py-3 font-semibold border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors">
+              <Plus size={18} /> Python
             </Link>
-            <Link href="/newmindmap" className="rounded-2xl px-6 py-3 font-semibold border border-purple-600 text-purple-400 hover:bg-purple-600 hover:text-white transition-colors">
-              Créer Mindmap
+            <Link href="/newmindmap" className="inline-flex items-center gap-1.5 rounded-2xl px-6 py-3 font-semibold border border-purple-600 text-purple-400 hover:bg-purple-600 hover:text-white transition-colors">
+              <Plus size={18} /> Mindmap
             </Link>
-            <Link href="/newtable" className="rounded-2xl px-6 py-3 font-semibold border border-green-600 text-green-400 hover:bg-green-600 hover:text-white transition-colors">
-              Créer Table
+            <Link href="/newtable" className="inline-flex items-center gap-1.5 rounded-2xl px-6 py-3 font-semibold border border-green-600 text-green-400 hover:bg-green-600 hover:text-white transition-colors">
+              <Plus size={18} /> Table
             </Link>
-            <Link href="/newpresentation" className="rounded-2xl px-6 py-3 font-semibold border border-orange-600 text-orange-400 hover:bg-orange-600 hover:text-white transition-colors">
-              Créer Présentation
+            <Link href="/newpresentation" className="inline-flex items-center gap-1.5 rounded-2xl px-6 py-3 font-semibold border border-orange-600 text-orange-400 hover:bg-orange-600 hover:text-white transition-colors">
+              <Plus size={18} /> Présentation
             </Link>
           </div>
         </div>
