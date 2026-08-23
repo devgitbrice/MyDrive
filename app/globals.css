@@ -20,6 +20,12 @@
   }
 }
 
+/* Désactive le pull-to-refresh natif du navigateur mobile
+   (le tir vers le bas depuis le haut de la page ne recharge plus). */
+html, body {
+  overscroll-behavior-y: contain;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
