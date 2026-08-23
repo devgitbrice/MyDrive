@@ -19,8 +19,9 @@ export interface MyDriveItem {
   created_at: string;
   observation?: string;
   content?: string;
-  type: string;         // <--- AJOUTEZ CETTE LIGNE
-  doc_type?: string;    // <--- AJOUTEZ CETTE LIGNE SI ABSENTE
+  type: string;
+  doc_type?: string;
+  parent_id?: string | null;
   tags?: Tag[];
 }
 

@@ -17,6 +17,7 @@ export async function fetchMyDrive(): Promise<MyDriveItem[]> {
       content,
       doc_type,
       type,
+      parent_id,
       created_at,
       mydrive_tags (
         tags (
@@ -35,7 +36,6 @@ export async function fetchMyDrive(): Promise<MyDriveItem[]> {
   }
 
   return (data ?? []).map((row: any) => {
-    // Aplatissement des tags pour MyDriveGallery
     const flattenedTags = (row.mydrive_tags || [])
       .map((mt: any) => mt.tags)
       .filter(Boolean);
@@ -50,6 +50,7 @@ export async function fetchMyDrive(): Promise<MyDriveItem[]> {
       created_at: row.created_at,
       type: row.type || "file",
       doc_type: row.doc_type || "scan",
+      parent_id: row.parent_id ?? null,
       tags: flattenedTags,
     };
   });
