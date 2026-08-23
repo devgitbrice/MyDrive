@@ -239,6 +239,20 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
   const [selectedDocType, setSelectedDocType] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<MyDriveItem | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("mydrive-view-mode");
+      if (saved === "list" || saved === "grid") setViewMode(saved);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("mydrive-view-mode", viewMode);
+    } catch {}
+  }, [viewMode]);
 
   // Mise à jour des props si elles changent
   useEffect(() => {
@@ -706,12 +720,69 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-neutral-500">Taille</span>
-                  <input type="range" min={0} max={100} value={size} onChange={(e) => setSize(Number(e.target.value))} className="w-24 cursor-pointer" />
+                  <input type="range" min={0} max={100} value={size} onChange={(e) => setSize(Number(e.target.value))} className="w-24 cursor-pointer" disabled={viewMode === "list"} />
+                </div>
+                <div className="inline-flex rounded-lg border border-neutral-700 overflow-hidden">
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    title="Vue grille"
+                    aria-pressed={viewMode === "grid"}
+                    className={`px-2.5 py-1.5 text-xs transition-colors ${viewMode === "grid" ? "bg-blue-600 text-white" : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"}`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                  </button>
+                  <button
+                    onClick={() => setViewMode("list")}
+                    title="Vue liste"
+                    aria-pressed={viewMode === "list"}
+                    className={`px-2.5 py-1.5 text-xs transition-colors ${viewMode === "list" ? "bg-blue-600 text-white" : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"}`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                  </button>
                 </div>
               </div>
             </div>
           </div>
 
+          {viewMode === "list" ? (
+            <div className="flex flex-col divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden flex-1">
+              {filteredItems.length > 0 ? (
+                filteredItems.map((item) => {
+                  const itemData = item as any;
+                  const type = itemData.doc_type || (itemData.image_url ? "photo" : "doc");
+                  const cfg = DOC_TYPE_CONFIG[type] || DOC_TYPE_CONFIG.doc;
+                  const href = getLinkHref(item);
+                  const rowClass = "flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-800/50 transition-colors cursor-pointer";
+                  const inner = (
+                    <>
+                      <span className={`shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg ${cfg.bg} ${cfg.text}`}>
+                        {cfg.icon}
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm text-white truncate">{item.title || "(sans titre)"}</span>
+                        {item.tags && item.tags.length > 0 && (
+                          <span className="block text-[10px] text-neutral-500 truncate">{item.tags.map((t) => t.name).join(" · ")}</span>
+                        )}
+                      </span>
+                      <span className={`hidden sm:inline text-[11px] px-2 py-0.5 rounded-full border ${cfg.border} ${cfg.text}`}>{cfg.label}</span>
+                      <span className="hidden md:inline text-xs text-neutral-500 w-28 text-right">
+                        {item.created_at ? format(new Date(item.created_at), "d MMM yyyy", { locale: fr }) : ""}
+                      </span>
+                    </>
+                  );
+                  return href ? (
+                    <Link key={item.id} href={href} className={rowClass}>{inner}</Link>
+                  ) : (
+                    <div key={item.id} onClick={() => handleOpen(item)} className={rowClass}>{inner}</div>
+                  );
+                })
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
+                  <p>Aucun document trouvé</p>
+                </div>
+              )}
+            </div>
+          ) : (
           <div className={`grid gap-4 ${gridClass} flex-1 content-start`}>
             {filteredItems.length > 0 ? (
               filteredItems.map((item) => {
@@ -741,6 +812,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
               </div>
             )}
           </div>
+          )}
 
           <footer className="mt-12 pt-8 pb-4 border-t border-neutral-800">
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-3">
