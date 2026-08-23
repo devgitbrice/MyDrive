@@ -9,6 +9,7 @@ import DocRibbon from "@/features/doc/components/DocRibbon";
 import BlockManager from "@/features/doc/components/BlockManager";
 import FileSearchModal, { getEditUrl, type SearchResult } from "@/components/FileSearchModal";
 import { useThemeStore } from "@/store/themeStore";
+import { supabase } from "@/lib/supabaseClient";
 
 interface DocEditorProps {
   allTags: Tag[];
@@ -27,16 +28,25 @@ export default function DocEditor({ allTags: initialAllTags, initialData }: DocE
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
   const [mobileTagsOpen, setMobileTagsOpen] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
+  // Contenu courant (mis à jour à chaque frappe ET à chaque event Realtime externe)
+  const [contentSnapshot, setContentSnapshot] = useState(initialData.content);
+  // Clé de re-mount du BlockManager pour appliquer un contenu externe
+  const [contentKey, setContentKey] = useState(0);
   const theme = useThemeStore((s) => s.theme);
   const light = theme === "light";
 
   const contentRef = useRef(initialData.content);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Empreinte du dernier envoi local pour ignorer l'écho de nos propres saves
+  const lastLocalSaveHashRef = useRef<string>("");
+
+  const hashStr = (s: string) => `${s.length}:${s.slice(0, 200)}`;
 
   const autoSave = useCallback(async (t: string, c: string, o: string) => {
     if (!t.trim()) return;
     setStatus("saving");
     try {
+      lastLocalSaveHashRef.current = hashStr(t + "|" + c + "|" + o);
       await updateDriveItemAction(initialData.id, { title: t.trim(), content: c, observation: o });
       setStatus("saved");
       setTimeout(() => setStatus("idle"), 1500);
@@ -101,6 +111,44 @@ export default function DocEditor({ allTags: initialAllTags, initialData }: DocE
     };
   }, [chromeVisible]);
 
+  // Supabase Realtime : suit les modifs de CE doc et met à jour l'UI en direct
+  useEffect(() => {
+    const channel = supabase
+      .channel(`doc-editor-${initialData.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "MyDrive",
+          filter: `id=eq.${initialData.id}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          const nextTitle = row.title ?? "";
+          const nextObs = row.observation ?? "";
+          const nextContent = row.content ?? "";
+          const incomingHash = hashStr(nextTitle + "|" + nextContent + "|" + nextObs);
+          // Ignore l'écho de notre propre save
+          if (incomingHash === lastLocalSaveHashRef.current) return;
+          // Met à jour les champs simples
+          if (nextTitle !== title) setTitle(nextTitle);
+          if (nextObs !== observation) setObservation(nextObs);
+          // Contenu : ne remonte le BlockManager que si le contenu diffère vraiment
+          if (nextContent !== contentRef.current) {
+            contentRef.current = nextContent;
+            setContentSnapshot(nextContent);
+            setContentKey((k) => k + 1);
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData.id]);
+
   const handleTitleChange = (val: string) => {
     setTitle(val);
     scheduleAutoSave(val, contentRef.current, observation);
@@ -130,8 +178,8 @@ export default function DocEditor({ allTags: initialAllTags, initialData }: DocE
         <DocRibbon tocOpen={tocOpen} setTocOpen={setTocOpen} />
       </div>
 
-      {/* Le composant est posé directement, la div buggée a disparu ! */}
-      <BlockManager initialHtml={initialData.content} tocOpen={tocOpen} onChange={handleContentChange} chromeVisible={chromeVisible} docTitle={title} />
+      {/* key={contentKey} force le re-mount du BlockManager quand un changement Realtime arrive */}
+      <BlockManager key={contentKey} initialHtml={contentSnapshot} tocOpen={tocOpen} onChange={handleContentChange} chromeVisible={chromeVisible} docTitle={title} />
 
       {/* Tags panel — always visible on desktop, toggle on mobile */}
       <div className={`${light ? "bg-neutral-100 border-neutral-300" : "bg-neutral-900 border-neutral-800"} border-t shrink-0 ${chromeClass}`}>
