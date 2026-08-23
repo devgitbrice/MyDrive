@@ -1,3 +1,4 @@
+// MyDrive home — server component, folder navigation is fully client-side.
 import { Suspense } from "react";
 import Link from "next/link";
 import { Settings, Plus } from "lucide-react";
