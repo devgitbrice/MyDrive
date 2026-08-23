@@ -12,9 +12,10 @@ interface BlockManagerProps {
   tocOpen: boolean;
   onChange: (html: string) => void;
   chromeVisible?: boolean;
+  docTitle?: string;
 }
 
-export default function BlockManager({ initialHtml, tocOpen, onChange, chromeVisible = true }: BlockManagerProps) {
+export default function BlockManager({ initialHtml, tocOpen, onChange, chromeVisible = true, docTitle }: BlockManagerProps) {
   const [tocEntries, setTocEntries] = useState<TocEntry[]>([]);
   const tocTimeout = useRef<NodeJS.Timeout | null>(null);
   const saveRef = useRef<() => void>(() => {});
@@ -131,6 +132,11 @@ export default function BlockManager({ initialHtml, tocOpen, onChange, chromeVis
       <TocSidebar entries={tocEntries} tocOpen={tocOpen} />
       <div className="flex-1 overflow-y-auto w-full min-w-0">
         <div className="max-w-4xl mx-auto p-6 pb-32 w-full">
+          {docTitle && docTitle.trim() && (
+            <h1 className={`text-3xl md:text-4xl font-bold mb-6 ${light ? "text-neutral-900" : "text-white"}`}>
+              {docTitle}
+            </h1>
+          )}
           {blocks.map((block) => (
             <SingleBlock
               key={block.id}
