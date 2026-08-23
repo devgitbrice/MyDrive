@@ -5,16 +5,12 @@ import FolderView from "@/features/mydrive/components/FolderView";
 import CreateVoyageButton from "@/features/voyage/components/CreateVoyageButton";
 import AddFileButton from "@/components/AddFileButton";
 
-export const dynamic = "force-dynamic";
+// La page ne lit pas les searchParams : le dossier courant est géré côté client
+// via useSearchParams() dans FolderView. Cela laisse Next mettre la page en cache
+// et permet le changement de dossier instantané (sans nouveau fetch serveur).
 
-export default async function MyDrivePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ folder?: string }>;
-}) {
+export default async function MyDrivePage() {
   const [items, allTags] = await Promise.all([fetchMyDrive(), fetchAllTags()]);
-  const params = await searchParams;
-  const folderId = params?.folder ?? null;
 
   const lastUpdate = items.reduce<Date | null>((max, item) => {
     if (!item.created_at) return max;
@@ -67,7 +63,7 @@ export default async function MyDrivePage({
         </div>
       </header>
 
-      <FolderView items={items} allTags={allTags} folderId={folderId} />
+      <FolderView items={items} allTags={allTags} />
     </main>
   );
 }

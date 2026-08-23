@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Folder as FolderIcon, FolderPlus, ChevronRight, Home, Trash2, Pencil } from "lucide-react";
 import type { MyDriveItem, Tag } from "@/features/mydrive/types";
 import { createFolder, moveItem, deleteFolder, renameFolder } from "@/features/mydrive/lib/folders";
@@ -13,19 +13,20 @@ const UNFILED = "__unfiled__";
 interface Props {
   items: MyDriveItem[];
   allTags: Tag[];
-  folderId: string | null;
 }
 
-export default function FolderView({ items, allTags, folderId }: Props) {
+export default function FolderView({ items, allTags }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const folderIdParam = searchParams.get("folder");
+  const folderId: string | null = folderIdParam ?? null;
+
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [dragOverId, setDragOverId] = useState<string | null | "__ROOT__">(null);
   const [moveTarget, setMoveTarget] = useState<MyDriveItem | null>(null);
 
-  // Mémorise le dossier courant dans un cookie lu par les actions de création
-  // côté serveur (createDocRow, createMindmapAction, createPythonScriptAction,
-  // createVoyageAction) et côté client (createMyDriveRow).
+  // Cookie « dossier courant » pour les créations côté serveur
   useEffect(() => {
     const v = (folderId && folderId !== UNFILED) ? folderId : "";
     document.cookie = `mydrive-parent=${encodeURIComponent(v)}; path=/; max-age=86400; SameSite=Lax`;
@@ -149,7 +150,7 @@ export default function FolderView({ items, allTags, folderId }: Props) {
   return (
     <div className="space-y-6">
       <nav className="flex items-center gap-1 text-sm text-neutral-400 flex-wrap">
-        <Link href="/mydrive" className="hover:text-blue-400 flex items-center gap-1">
+        <Link href="/mydrive" scroll={false} className="hover:text-blue-400 flex items-center gap-1">
           <Home size={14} /> Accueil
         </Link>
         {folderId === UNFILED && (
@@ -164,7 +165,7 @@ export default function FolderView({ items, allTags, folderId }: Props) {
             {i === breadcrumb.length - 1 ? (
               <span className="text-neutral-200">{f.title}</span>
             ) : (
-              <Link href={`/mydrive?folder=${f.id}`} className="hover:text-blue-400">{f.title}</Link>
+              <Link href={`/mydrive?folder=${f.id}`} scroll={false} className="hover:text-blue-400">{f.title}</Link>
             )}
           </span>
         ))}
@@ -204,6 +205,7 @@ export default function FolderView({ items, allTags, folderId }: Props) {
           {showUnfiledTile && (
             <Link
               href={`/mydrive?folder=${UNFILED}`}
+              scroll={false}
               onDragOver={(e) => { e.preventDefault(); setDragOverId("__ROOT__"); }}
               onDragLeave={() => setDragOverId((v) => v === "__ROOT__" ? null : v)}
               onDrop={(e) => handleDrop(e, null)}
@@ -232,6 +234,7 @@ export default function FolderView({ items, allTags, folderId }: Props) {
               >
                 <Link
                   href={`/mydrive?folder=${f.id}`}
+                  scroll={false}
                   className={`flex flex-col items-center justify-center bg-neutral-900 border rounded-xl aspect-square p-4 transition ${isOver ? "border-blue-500 bg-blue-500/10" : "border-neutral-800 hover:border-blue-500"}`}
                 >
                   <FolderIcon size={48} className="text-yellow-400 mb-2" />
