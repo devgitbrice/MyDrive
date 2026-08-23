@@ -8,10 +8,9 @@ import AddFileButton from "@/components/AddFileButton";
 import AddPendingDocButton from "@/components/AddPendingDocButton";
 import ThemeToggle from "@/components/ThemeToggle";
 
-// Toujours re-fetch côté serveur pour que les mutations Supabase (ajout dossier,
-// déplacement, upload pending) soient reflétées à chaque visite.
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+// La navigation entre dossiers reste cote client (useSearchParams).
+// Freshness assuree par : Supabase Realtime + router.refresh() apres chaque
+// mutation + rechargement natif (pull-to-refresh) pour les mutations externes.
 
 export default async function MyDrivePage() {
   const [items, allTags] = await Promise.all([fetchMyDrive(), fetchAllTags()]);
