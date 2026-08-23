@@ -3,6 +3,7 @@ import { Settings, Plus } from "lucide-react";
 import { fetchMyDrive, fetchAllTags } from "@/features/mydrive/lib/fetchMyDrive";
 import FolderView from "@/features/mydrive/components/FolderView";
 import CreateVoyageButton from "@/features/voyage/components/CreateVoyageButton";
+import AddFileButton from "@/components/AddFileButton";
 
 export const dynamic = "force-dynamic";
 
@@ -61,9 +62,7 @@ export default async function MyDrivePage({
               <Plus size={16} /> Présentation
             </Link>
             <CreateVoyageButton />
-            <Link href="/add" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors">
-              <Plus size={16} /> Fichier
-            </Link>
+            <AddFileButton />
           </div>
         </div>
       </header>

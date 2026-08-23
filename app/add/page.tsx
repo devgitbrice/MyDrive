@@ -1,12 +1,22 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useNewItemStore } from "@/store/newItemStore";
 import { uploadToMyDrive } from "@/lib/uploadToMyDrive";
 import { createMyDriveRow } from "@/lib/createMyDriveRow";
 
+function getCurrentFolderIdFromCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|; )mydrive-parent=([^;]*)/);
+  const v = match ? decodeURIComponent(match[1]) : "";
+  if (!v || v === "__unfiled__") return null;
+  return v;
+}
+
 export default function AddPage() {
+  const router = useRouter();
   const {
     photo,
     observation,
@@ -19,6 +29,8 @@ export default function AddPage() {
     setError,
     resetAll,
   } = useNewItemStore();
+
+  const [progress, setProgress] = useState(0);
 
   const previewUrl = useMemo(() => {
     if (!photo) return null;
@@ -37,13 +49,13 @@ export default function AddPage() {
         <div className="w-full max-w-md space-y-4 text-center">
           <h1 className="text-2xl font-semibold">Ajouter</h1>
           <p className="text-sm opacity-80">
-            Aucune photo détectée. Reviens à l’accueil et appuie sur AJOUTER.
+            Aucun fichier sélectionné. Reviens à MyDrive et utilise le bouton « + Fichier » pour choisir une source.
           </p>
           <Link
             className="block w-full rounded-2xl px-6 py-4 font-semibold border"
-            href="/"
+            href="/mydrive"
           >
-            Retour accueil
+            Retour MyDrive
           </Link>
         </div>
       </main>
@@ -52,16 +64,14 @@ export default function AddPage() {
 
   async function handleFinalize() {
     try {
-      // 🔒 Re-check ici (TS + runtime). Photo peut redevenir null entre-temps.
       const currentPhoto = photo;
       if (!currentPhoto) {
-        throw new Error("Photo manquante.");
+        throw new Error("Fichier manquant.");
       }
-
-      // Évite double submit
       if (status === "uploading") return;
 
       setStatus("uploading");
+      setProgress(0);
 
       const cleanTitle = title.trim();
       const cleanObs = observation.trim();
@@ -69,7 +79,9 @@ export default function AddPage() {
       if (!cleanObs) throw new Error("Observation manquante.");
       if (!cleanTitle) throw new Error("Titre manquant.");
 
-      const { imagePath, publicUrl } = await uploadToMyDrive(currentPhoto);
+      const { imagePath, publicUrl } = await uploadToMyDrive(currentPhoto, (pct) => {
+        setProgress(pct);
+      });
 
       await createMyDriveRow({
         title: cleanTitle,
@@ -83,6 +95,12 @@ export default function AddPage() {
       const message = e instanceof Error ? e.message : "Erreur inconnue.";
       setError(message);
     }
+  }
+
+  function handleBackToFolder() {
+    const folderId = getCurrentFolderIdFromCookie();
+    resetAll();
+    router.push(folderId ? `/mydrive?folder=${folderId}` : "/mydrive");
   }
 
   return (
@@ -139,14 +157,26 @@ export default function AddPage() {
               className="w-full rounded-2xl px-6 py-4 font-semibold border disabled:opacity-50"
               onClick={handleFinalize}
             >
-              Valider le titre
+              Enregistrer
             </button>
           </section>
         )}
 
         {status === "uploading" && (
-          <section className="space-y-4 text-center">
-            <p className="text-sm opacity-80">Enregistrement en cours…</p>
+          <section className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="opacity-80">Envoi en cours…</span>
+              <span className="font-mono opacity-80">{progress} %</span>
+            </div>
+            <div className="w-full h-3 rounded-full bg-neutral-800 overflow-hidden">
+              <div
+                className="h-full bg-blue-500 transition-all duration-200"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            {progress >= 100 && (
+              <p className="text-xs opacity-60 text-center">Finalisation…</p>
+            )}
           </section>
         )}
 
@@ -155,10 +185,17 @@ export default function AddPage() {
             <h2 className="text-lg font-semibold">C’est bon, merci ✅</h2>
             <button
               type="button"
+              className="w-full rounded-2xl px-6 py-4 font-semibold border bg-blue-600 text-white"
+              onClick={handleBackToFolder}
+            >
+              Retour au dossier
+            </button>
+            <button
+              type="button"
               className="w-full rounded-2xl px-6 py-4 font-semibold border"
               onClick={resetAll}
             >
-              Recommencer
+              Ajouter un autre fichier
             </button>
           </section>
         )}
