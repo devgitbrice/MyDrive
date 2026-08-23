@@ -150,7 +150,7 @@ function MiniSlidePreview({ content, slideIndex }: { content: string; slideIndex
           )}
           {el.type === "image" && el.src && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={el.src} alt="" className="w-full h-full object-cover" />
+            <img src={el.src} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
           )}
           {el.type === "shape" && (
             <div
@@ -563,7 +563,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
           <div className={`${imageHeightClass} w-full bg-neutral-950 relative overflow-hidden flex items-center justify-center`}>
             {validUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={validUrl} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+              <img src={validUrl} alt={item.title} loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
             ) : (
               <div className="flex flex-col items-center justify-center text-neutral-700 group-hover:text-blue-500 transition-colors">
                  {itemData.type === "folder" ? (
