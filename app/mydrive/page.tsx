@@ -9,6 +9,15 @@ export const dynamic = "force-dynamic";
 export default async function MyDrivePage() {
   const [items, allTags] = await Promise.all([fetchMyDrive(), fetchAllTags()]);
 
+  const lastUpdate = items.reduce<Date | null>((max, item) => {
+    if (!item.created_at) return max;
+    const d = new Date(item.created_at);
+    return !max || d > max ? d : max;
+  }, null);
+  const lastUpdateStr = lastUpdate
+    ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" }).format(lastUpdate)
+    : null;
+
   return (
     <main className="min-h-dvh p-6 space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
@@ -23,7 +32,13 @@ export default async function MyDrivePage() {
           </Link>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col items-end gap-2 ml-auto">
+          {lastUpdateStr && (
+            <span className="text-xs text-neutral-500" title="Dernière mise à jour">
+              Dernière MAJ : <span className="text-neutral-300">{lastUpdateStr}</span>
+            </span>
+          )}
+          <div className="flex flex-wrap items-center justify-end gap-3">
           <Link href="/newdoc" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white transition-colors">
             <Plus size={16} /> Doc
           </Link>
@@ -60,6 +75,7 @@ export default async function MyDrivePage() {
           <button disabled className="rounded-2xl px-4 py-2 text-sm font-semibold border border-indigo-600 text-indigo-400 opacity-60 cursor-not-allowed">
             Post Article
           </button>
+          </div>
         </div>
       </header>
 
