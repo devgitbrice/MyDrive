@@ -3,6 +3,9 @@ import { fetchAllTags } from "@/features/mydrive/lib/fetchMyDrive";
 import DocEditor from "./DocEditor";
 import { notFound } from "next/navigation";
 
+// Toujours re-fetch le doc a chaque requete (evite le contenu perime dans l'iframe/preview)
+export const dynamic = "force-dynamic";
+
 export default async function EditDocPage({
   params,
 }: {
