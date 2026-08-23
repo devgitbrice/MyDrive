@@ -8,6 +8,7 @@ import type { MyDriveItem, Tag } from "@/features/mydrive/types";
 import { createFolder, moveItem, deleteFolder, renameFolder } from "@/features/mydrive/lib/folders";
 import { supabase } from "@/lib/supabaseClient";
 import MyDriveGallery from "./MyDriveGallery";
+import PendingCard from "./PendingCard";
 
 const UNFILED = "__unfiled__";
 
@@ -34,8 +35,6 @@ export default function FolderView({ items, allTags }: Props) {
     refreshTimer.current = setTimeout(() => router.refresh(), 400);
   };
 
-  // 1) Supabase Realtime : abonnement aux changements de MyDrive
-  //    (nécessite : `alter publication supabase_realtime add table "MyDrive";`)
   useEffect(() => {
     const channel = supabase
       .channel("mydrive-live")
@@ -51,7 +50,6 @@ export default function FolderView({ items, allTags }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 2) Fallback : rafraîchit quand l'onglet redevient visible / au focus fenêtre
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === "visible") scheduleRefresh();
@@ -66,7 +64,6 @@ export default function FolderView({ items, allTags }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Cookie « dossier courant » pour les créations côté serveur
   useEffect(() => {
     const v = (folderId && folderId !== UNFILED) ? folderId : "";
     document.cookie = `mydrive-parent=${encodeURIComponent(v)}; path=/; max-age=86400; SameSite=Lax`;
@@ -111,10 +108,19 @@ export default function FolderView({ items, allTags }: Props) {
     );
   }, [items, folderId]);
 
-  const currentDocs = useMemo<MyDriveItem[]>(() => {
-    if (folderId === null) return [];
+  // Docs du dossier courant, séparés en 2 : pending (placeholders) et normal
+  const { currentPendingDocs, currentNormalDocs } = useMemo(() => {
+    if (folderId === null) return { currentPendingDocs: [], currentNormalDocs: [] };
     const target = folderId === UNFILED ? null : folderId;
-    return items.filter((i: any) => i.type !== "folder" && (i.parent_id ?? null) === target);
+    const pending: MyDriveItem[] = [];
+    const normal: MyDriveItem[] = [];
+    items.forEach((i: any) => {
+      if (i.type === "folder") return;
+      if ((i.parent_id ?? null) !== target) return;
+      if (i.type === "pending") pending.push(i);
+      else normal.push(i);
+    });
+    return { currentPendingDocs: pending, currentNormalDocs: normal };
   }, [items, folderId]);
 
   const unfiledCount = useMemo(
@@ -303,12 +309,27 @@ export default function FolderView({ items, allTags }: Props) {
         </div>
       )}
 
-      {folderId !== null && (
-        currentDocs.length > 0 ? (
-          <MyDriveGallery items={currentDocs} allTags={allTags} />
-        ) : (
-          <p className="text-center text-neutral-500 py-8">Aucun document dans ce dossier.</p>
-        )
+      {/* Documents en attente (placeholders d'upload) */}
+      {folderId !== null && currentPendingDocs.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-xs uppercase tracking-wider font-bold text-amber-400/80">
+            En attente ({currentPendingDocs.length})
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {currentPendingDocs.map((p) => (
+              <PendingCard key={p.id} item={p} imageHeightClass="h-48 md:h-56" />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Documents normaux */}
+      {folderId !== null && currentNormalDocs.length > 0 && (
+        <MyDriveGallery items={currentNormalDocs} allTags={allTags} />
+      )}
+
+      {folderId !== null && currentNormalDocs.length === 0 && currentPendingDocs.length === 0 && (
+        <p className="text-center text-neutral-500 py-8">Aucun document dans ce dossier.</p>
       )}
 
       {folderId === null && currentSubfolders.length === 0 && !showUnfiledTile && (
