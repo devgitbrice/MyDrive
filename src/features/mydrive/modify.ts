@@ -2,6 +2,18 @@
 
 import { supabase } from "@/lib/supabaseClient";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+
+async function getCurrentFolderId(): Promise<string | null> {
+  try {
+    const store = await cookies();
+    const v = store.get("mydrive-parent")?.value;
+    if (!v || v === "" || v === "__unfiled__") return null;
+    return v;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * METTRE À JOUR UN ITEM (Titre, Observation, etc.)
@@ -34,7 +46,6 @@ export async function replaceImageAction(id: string, imagePath: string, imageDat
   }
   const bytes = Buffer.from(parts[1], "base64");
 
-  // 1. Upload le nouveau fichier (upsert remplace l'ancien directement)
   const { error: uploadError } = await supabase.storage
     .from("MyDrive")
     .upload(imagePath, bytes, {
@@ -48,7 +59,6 @@ export async function replaceImageAction(id: string, imagePath: string, imageDat
     throw new Error("Erreur lors de l'upload du nouveau fichier");
   }
 
-  // 3. Update URL avec cache buster
   const { data } = supabase.storage.from("MyDrive").getPublicUrl(imagePath);
   const newUrl = data?.publicUrl ? `${data.publicUrl}?t=${Date.now()}` : null;
 
@@ -166,6 +176,7 @@ export async function createMindmapAction(input: {
   content: string;
   observation?: string;
 }) {
+  const parentId = await getCurrentFolderId();
   const { data, error } = await supabase
     .from("MyDrive")
     .insert([
@@ -175,6 +186,7 @@ export async function createMindmapAction(input: {
         observation: input.observation || "",
         doc_type: "mindmap",
         type: "file",
+        parent_id: parentId,
       },
     ])
     .select()
@@ -214,6 +226,7 @@ export async function searchDriveItemsAction(query: string) {
  * --- CRÉATION VOYAGE ---
  */
 export async function createVoyageAction(title: string) {
+  const parentId = await getCurrentFolderId();
   const { data, error } = await supabase
     .from("MyDrive")
     .insert({
@@ -224,6 +237,7 @@ export async function createVoyageAction(title: string) {
       image_url: "",
       doc_type: "voyage",
       type: "file",
+      parent_id: parentId,
     })
     .select("id")
     .single();
@@ -243,9 +257,9 @@ export async function createPythonScriptAction(input: {
   title: string;
   content: string;
   observation?: string;
-  tagIds?: string[]; // Changé de 'tags' à 'tagIds' pour correspondre à l'éditeur
+  tagIds?: string[];
 }) {
-  // 1. Insertion dans MyDrive
+  const parentId = await getCurrentFolderId();
   const { data, error } = await supabase
     .from("MyDrive")
     .insert([
@@ -255,6 +269,7 @@ export async function createPythonScriptAction(input: {
         observation: input.observation || "",
         doc_type: "python",
         type: "file",
+        parent_id: parentId,
       },
     ])
     .select()
@@ -265,7 +280,6 @@ export async function createPythonScriptAction(input: {
     throw new Error(`Erreur Supabase: ${error.message}`);
   }
 
-  // 2. Liaison des tags si présents
   if (input.tagIds && input.tagIds.length > 0) {
     const tagLinks = input.tagIds.map(tagId => ({
       mydrive_id: data.id,
@@ -278,7 +292,6 @@ export async function createPythonScriptAction(input: {
 
     if (tagError) {
       console.error("Erreur liaison tags Python:", tagError);
-      // On ne throw pas forcément ici, le script est quand même créé
     }
   }
 

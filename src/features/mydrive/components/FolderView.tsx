@@ -23,6 +23,14 @@ export default function FolderView({ items, allTags, folderId }: Props) {
   const [dragOverId, setDragOverId] = useState<string | null | "__ROOT__">(null);
   const [moveTarget, setMoveTarget] = useState<MyDriveItem | null>(null);
 
+  // Mémorise le dossier courant dans un cookie lu par les actions de création
+  // côté serveur (createDocRow, createMindmapAction, createPythonScriptAction,
+  // createVoyageAction) et côté client (createMyDriveRow).
+  useEffect(() => {
+    const v = (folderId && folderId !== UNFILED) ? folderId : "";
+    document.cookie = `mydrive-parent=${encodeURIComponent(v)}; path=/; max-age=86400; SameSite=Lax`;
+  }, [folderId]);
+
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail as { id: string };
