@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { Settings, Plus } from "lucide-react";
 import { fetchMyDrive, fetchAllTags } from "@/features/mydrive/lib/fetchMyDrive";
@@ -39,7 +40,7 @@ export default async function MyDrivePage() {
         <div className="flex flex-col items-end gap-2 ml-auto">
           {lastUpdateStr && (
             <span className="text-xs text-neutral-500" title="Dernière mise à jour (heure de Paris)">
-              Dernière MAJ : <span className="text-neutral-300">{lastUpdateStr}</span>
+              Dernière MAJ : <span className="text-neutral-300">{lastUpdateStr}</span>
             </span>
           )}
           <div className="flex flex-wrap items-center justify-end gap-3">
@@ -65,7 +66,9 @@ export default async function MyDrivePage() {
         </div>
       </header>
 
-      <FolderView items={items} allTags={allTags} />
+      <Suspense fallback={null}>
+        <FolderView items={items} allTags={allTags} />
+      </Suspense>
     </main>
   );
 }
