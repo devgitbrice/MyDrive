@@ -8,9 +8,10 @@ import AddFileButton from "@/components/AddFileButton";
 import AddPendingDocButton from "@/components/AddPendingDocButton";
 import ThemeToggle from "@/components/ThemeToggle";
 
-// La navigation entre dossiers reste cote client (useSearchParams).
-// Freshness assuree par : Supabase Realtime + router.refresh() apres chaque
-// mutation + rechargement natif (pull-to-refresh) pour les mutations externes.
+// Re-render a chaque requete pour que les mutations Supabase externes
+// (curl, autre onglet, etc.) apparaissent sans hard refresh.
+// La nav intra-page reste rapide grace au soft-nav (useSearchParams).
+export const dynamic = "force-dynamic";
 
 export default async function MyDrivePage() {
   const [items, allTags] = await Promise.all([fetchMyDrive(), fetchAllTags()]);
