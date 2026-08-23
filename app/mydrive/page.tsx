@@ -4,10 +4,7 @@ import { fetchMyDrive, fetchAllTags } from "@/features/mydrive/lib/fetchMyDrive"
 import FolderView from "@/features/mydrive/components/FolderView";
 import CreateVoyageButton from "@/features/voyage/components/CreateVoyageButton";
 import AddFileButton from "@/components/AddFileButton";
-
-// La page ne lit pas les searchParams : le dossier courant est géré côté client
-// via useSearchParams() dans FolderView. Cela laisse Next mettre la page en cache
-// et permet le changement de dossier instantané (sans nouveau fetch serveur).
+import AddPendingDocButton from "@/components/AddPendingDocButton";
 
 export default async function MyDrivePage() {
   const [items, allTags] = await Promise.all([fetchMyDrive(), fetchAllTags()]);
@@ -42,7 +39,7 @@ export default async function MyDrivePage() {
         <div className="flex flex-col items-end gap-2 ml-auto">
           {lastUpdateStr && (
             <span className="text-xs text-neutral-500" title="Dernière mise à jour (heure de Paris)">
-              Dernière MAJ : <span className="text-neutral-300">{lastUpdateStr}</span>
+              Dernière MAJ : <span className="text-neutral-300">{lastUpdateStr}</span>
             </span>
           )}
           <div className="flex flex-wrap items-center justify-end gap-3">
@@ -63,6 +60,7 @@ export default async function MyDrivePage() {
             </Link>
             <CreateVoyageButton />
             <AddFileButton />
+            <AddPendingDocButton />
           </div>
         </div>
       </header>
