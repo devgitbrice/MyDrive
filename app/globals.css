@@ -26,22 +26,16 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Style pour les liens auto-générés */
+/* Style pour les liens auto-generes */
 a {
   @apply text-blue-500 hover:underline cursor-pointer;
 }
 
-/* Override inline text colors (from execCommand foreColor) in dark mode editor
-   so that dark-colored text saved in light mode stays readable on dark backgrounds.
-   Only affects rendering — saved HTML retains original colors. */
-.dark-editor-override font[color] {
-  color: inherit !important;
-}
-.dark-editor-override [style*="color"] {
-  color: inherit !important;
-}
+/* Override inline text colors */
+.dark-editor-override font[color] { color: inherit !important; }
+.dark-editor-override [style*="color"] { color: inherit !important; }
 
-/* Vue épurée : masque les widgets flottants (ChatBot, TaskManager) */
+/* Vue epuree : masque les widgets flottants */
 body.doc-zen-active .fixed.bottom-6.right-6,
 body.doc-zen-active .fixed.bottom-6.right-24,
 body.doc-zen-active .fixed.bottom-24.right-6,
@@ -49,4 +43,56 @@ body.doc-zen-active .fixed.bottom-24.right-24 {
   opacity: 0 !important;
   pointer-events: none !important;
   transition: opacity 500ms;
+}
+
+/* =============================================================
+   MODE CLAIR GLOBAL — active via <body class="theme-light">
+   Cible les classes Tailwind sombres et les repeint en clair.
+   ============================================================= */
+body.theme-light {
+  background: #ffffff;
+  color: #171717;
+}
+body.theme-light .bg-black,
+body.theme-light .bg-neutral-950,
+body.theme-light .bg-neutral-900,
+body.theme-light [class*="bg-neutral-900/"],
+body.theme-light [class*="bg-neutral-950/"] {
+  background-color: #ffffff !important;
+}
+body.theme-light .bg-neutral-800,
+body.theme-light [class*="bg-neutral-800/"] {
+  background-color: #f4f4f5 !important;
+}
+body.theme-light .bg-neutral-700,
+body.theme-light [class*="bg-neutral-700/"] {
+  background-color: #e4e4e7 !important;
+}
+body.theme-light .text-white,
+body.theme-light .text-neutral-100,
+body.theme-light .text-neutral-200 {
+  color: #171717 !important;
+}
+body.theme-light .text-neutral-300 { color: #262626 !important; }
+body.theme-light .text-neutral-400 { color: #52525b !important; }
+body.theme-light .text-neutral-500 { color: #71717a !important; }
+body.theme-light .text-neutral-600 { color: #a1a1aa !important; }
+body.theme-light .text-neutral-700 { color: #d4d4d8 !important; }
+body.theme-light .border-neutral-800,
+body.theme-light .border-neutral-700,
+body.theme-light [class*="border-neutral-800/"] {
+  border-color: #e4e4e7 !important;
+}
+
+/* Inputs et zones de saisie : gardent leur fond gris clair */
+body.theme-light input,
+body.theme-light textarea,
+body.theme-light select {
+  color: #171717;
+}
+
+/* Les cartes/panneaux avec bg-neutral-900 gardent un liseré */
+body.theme-light .rounded-xl.bg-neutral-900,
+body.theme-light .rounded-2xl.bg-neutral-900 {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }

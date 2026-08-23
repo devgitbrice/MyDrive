@@ -1,4 +1,3 @@
-// MyDrive home — server component, folder navigation is fully client-side.
 import { Suspense } from "react";
 import Link from "next/link";
 import { Settings, Plus } from "lucide-react";
@@ -7,6 +6,7 @@ import FolderView from "@/features/mydrive/components/FolderView";
 import CreateVoyageButton from "@/features/voyage/components/CreateVoyageButton";
 import AddFileButton from "@/components/AddFileButton";
 import AddPendingDocButton from "@/components/AddPendingDocButton";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default async function MyDrivePage() {
   const [items, allTags] = await Promise.all([fetchMyDrive(), fetchAllTags()]);
@@ -36,12 +36,13 @@ export default async function MyDrivePage() {
           >
             <Settings size={20} />
           </Link>
+          <ThemeToggle />
         </div>
 
         <div className="flex flex-col items-end gap-2 ml-auto">
           {lastUpdateStr && (
-            <span className="text-xs text-neutral-500" title="Dernière mise à jour (heure de Paris)">
-              Dernière MAJ : <span className="text-neutral-300">{lastUpdateStr}</span>
+            <span className="text-xs text-neutral-500" title="Derniere mise a jour (heure de Paris)">
+              Derniere MAJ : <span className="text-neutral-300">{lastUpdateStr}</span>
             </span>
           )}
           <div className="flex flex-wrap items-center justify-end gap-3">
@@ -58,7 +59,7 @@ export default async function MyDrivePage() {
               <Plus size={16} /> Table
             </Link>
             <Link href="/newpresentation" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border border-orange-600 text-orange-400 hover:bg-orange-600 hover:text-white transition-colors">
-              <Plus size={16} /> Présentation
+              <Plus size={16} /> Presentation
             </Link>
             <CreateVoyageButton />
             <AddFileButton />
