@@ -12,6 +12,7 @@ export default function AddFileButton() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const setPhoto = useNewItemStore((s) => s.setPhoto);
+  const setPhotos = useNewItemStore((s) => s.setPhotos);
 
   const hiddenInputStyle: React.CSSProperties = {
     position: "absolute",
@@ -26,9 +27,14 @@ export default function AddFileButton() {
   };
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
-    if (!file) return;
-    setPhoto(file);
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const arr = Array.from(files);
+    if (arr.length === 1) {
+      setPhoto(arr[0]);
+    } else {
+      setPhotos(arr);
+    }
     e.currentTarget.value = "";
     setOpen(false);
     router.push("/add");
@@ -36,9 +42,12 @@ export default function AddFileButton() {
 
   return (
     <>
+      {/* Camera: 1 shot at a time, pas de multiple */}
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={hiddenInputStyle} onChange={handleFileChange} />
-      <input ref={photoLibraryRef} type="file" accept="image/*" style={hiddenInputStyle} onChange={handleFileChange} />
-      <input ref={filesRef} type="file" accept="image/*,.pdf,.heic,.heif,.png,.jpg,.jpeg,.webp,.gif" style={hiddenInputStyle} onChange={handleFileChange} />
+      {/* Photothèque : multi-sélection */}
+      <input ref={photoLibraryRef} type="file" accept="image/*" multiple style={hiddenInputStyle} onChange={handleFileChange} />
+      {/* Fichiers : multi-sélection */}
+      <input ref={filesRef} type="file" accept="image/*,.pdf,.heic,.heif,.png,.jpg,.jpeg,.webp,.gif" multiple style={hiddenInputStyle} onChange={handleFileChange} />
 
       <button
         type="button"
@@ -65,7 +74,7 @@ export default function AddFileButton() {
               <span className="text-2xl">🖼️</span>
               <div>
                 <div>Photothèque</div>
-                <div className="text-sm text-neutral-400">Choisir une photo existante</div>
+                <div className="text-sm text-neutral-400">Choisir une ou plusieurs photos</div>
               </div>
             </button>
 
@@ -73,7 +82,7 @@ export default function AddFileButton() {
               <span className="text-2xl">📁</span>
               <div>
                 <div>Fichiers</div>
-                <div className="text-sm text-neutral-400">Parcourir vos fichiers (PDF, images…)</div>
+                <div className="text-sm text-neutral-400">Parcourir vos fichiers (multi-sélection possible)</div>
               </div>
             </button>
 

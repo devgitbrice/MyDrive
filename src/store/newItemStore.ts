@@ -11,6 +11,7 @@ export type NewItemStatus =
 type NewItemState = {
   // Data
   photo: File | null;
+  photos: File[]; // Batch (multi-file) upload queue
   observation: string;
   title: string;
 
@@ -20,6 +21,7 @@ type NewItemState = {
 
   // Actions data
   setPhoto: (file: File | null) => void;
+  setPhotos: (files: File[]) => void;
   setObservation: (value: string) => void;
   setTitle: (value: string) => void;
 
@@ -31,37 +33,30 @@ type NewItemState = {
 };
 
 export const useNewItemStore = create<NewItemState>((set) => ({
-  // ─────────────────────────
-  // Initial state
-  // ─────────────────────────
   photo: null,
+  photos: [],
   observation: "",
   title: "",
   status: "idle",
   error: null,
 
-  // ─────────────────────────
-  // Data setters (NO flow change)
-  // ─────────────────────────
   setPhoto: (file) =>
     set({
       photo: file,
+      photos: [],
       status: file ? "observation" : "idle",
     }),
 
-  setObservation: (value) =>
+  setPhotos: (files) =>
     set({
-      observation: value,
+      photos: files,
+      photo: null,
+      status: files.length > 0 ? "title" : "idle",
     }),
 
-  setTitle: (value) =>
-    set({
-      title: value,
-    }),
+  setObservation: (value) => set({ observation: value }),
+  setTitle: (value) => set({ title: value }),
 
-  // ─────────────────────────
-  // Flow setters
-  // ─────────────────────────
   setStatus: (status) => set({ status }),
 
   setError: (message) =>
@@ -70,12 +65,10 @@ export const useNewItemStore = create<NewItemState>((set) => ({
       status: "error",
     }),
 
-  // ─────────────────────────
-  // Reset
-  // ─────────────────────────
   resetAll: () =>
     set({
       photo: null,
+      photos: [],
       observation: "",
       title: "",
       status: "idle",
