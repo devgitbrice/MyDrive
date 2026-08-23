@@ -10,7 +10,6 @@ import { updateDriveItemAction, deleteDriveItemAction } from "@/features/mydrive
 import { parseSlides } from "@/presentation/types";
 import { downloadItemAsFile } from "@/features/mydrive/lib/downloadItem";
 
-// --- Icônes et couleurs par type de fichier ---
 const DOC_TYPE_CONFIG: Record<string, { icon: React.ReactNode; bg: string; text: string; border: string; label: string }> = {
   doc: {
     label: "Doc",
@@ -104,7 +103,6 @@ const DOC_TYPE_CONFIG: Record<string, { icon: React.ReactNode; bg: string; text:
   },
 };
 
-// --- Mini-aperçu d'une slide de présentation ---
 function MiniSlidePreview({ content, slideIndex }: { content: string; slideIndex: number }) {
   const slides = useMemo(() => {
     try {
@@ -169,7 +167,6 @@ function MiniSlidePreview({ content, slideIndex }: { content: string; slideIndex
   );
 }
 
-// --- Carte de présentation avec navigation ---
 function PresentationCardWrapper({
   item,
   imageHeightClass,
@@ -229,6 +226,20 @@ function PresentationCardWrapper({
   );
 }
 
+function dispatchMoveRequest(id: string) {
+  window.dispatchEvent(new CustomEvent("mydrive-request-move", { detail: { id } }));
+}
+
+function dragProps(id: string) {
+  return {
+    draggable: true,
+    onDragStart: (e: React.DragEvent<HTMLElement>) => {
+      e.dataTransfer.setData("text/mydrive-item", id);
+      e.dataTransfer.effectAllowed = "move";
+    },
+  };
+}
+
 export default function MyDriveGallery({ items: initialItems, allTags: initialTags }: MyDriveListProps) {
   const [items, setItems] = useState<MyDriveItem[]>(initialItems);
   const [allTags, setAllTags] = useState<Tag[]>(initialTags);
@@ -254,7 +265,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     } catch {}
   }, [viewMode]);
 
-  // Mise à jour des props si elles changent
   useEffect(() => {
     setItems(initialItems);
   }, [initialItems]);
@@ -263,7 +273,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     setAllTags(initialTags);
   }, [initialTags]);
 
-  // --- CALCULS TAILLE & GRILLE ---
   const imageHeightClass = useMemo(() => {
     if (size <= 33) return "h-36 md:h-40";
     if (size <= 66) return "h-48 md:h-56";
@@ -276,7 +285,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     return "grid-cols-1 md:grid-cols-2";
   }, [size]);
 
-  // --- TYPES DE CONTENU ---
   const contentTypes = [
     { key: "doc", label: "Doc", color: "blue" },
     { key: "python", label: "Python", color: "yellow" },
@@ -298,7 +306,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     return counts;
   }, [items]);
 
-  // --- FILTRAGE ---
   const filteredItems = useMemo(() => {
     let result = items;
     if (selectedDocType) {
@@ -328,7 +335,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     return result;
   }, [items, searchQuery, selectedTagId, selectedDocType]);
 
-// --- STATISTIQUES TAGS CORRIGÉES ---
   const tagCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     items.forEach((item) => {
@@ -348,7 +354,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     return items.filter((item) => !item.tags || item.tags.length === 0).length;
   }, [items]);
 
-  // --- NAVIGATION CLAVIER ---
   const tagIdList = useMemo<(string | null)[]>(
     () => [null, ...allTags.map((t) => t.id), NO_TAGS],
     [allTags]
@@ -456,7 +461,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
 
   const getLinkHref = (item: MyDriveItem) => {
     const itemData = item as any;
-    if (itemData.type === 'folder') return `/mydrive/folder/${item.id}`;
+    if (itemData.type === 'folder') return `/mydrive?folder=${item.id}`;
     switch (itemData.doc_type) {
       case "python": return `/editpython/${item.id}`;
       case "doc": return `/editdoc/${item.id}`;
@@ -488,6 +493,22 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    );
+
+    const moveButton = (
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dispatchMoveRequest(item.id);
+        }}
+        className="absolute top-2 right-11 z-20 w-7 h-7 flex items-center justify-center rounded-lg bg-neutral-800/90 hover:bg-blue-600 text-neutral-200 hover:text-white backdrop-blur-md border border-neutral-700 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Déplacer vers…"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 7l4 4-4 4M21 12H8" />
         </svg>
       </button>
     );
@@ -533,6 +554,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
                     <span>{typeConfig.label}</span>
                   </div>
                 )}
+                {moveButton}
                 {deleteButton}
               </>
             )}
@@ -564,6 +586,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
               </div>
             ) : null}
 
+            {moveButton}
             {deleteButton}
           </div>
         )}
@@ -715,7 +738,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
                   const type = itemData.doc_type || (itemData.image_url ? "photo" : "doc");
                   const cfg = DOC_TYPE_CONFIG[type] || DOC_TYPE_CONFIG.doc;
                   const href = getLinkHref(item);
-                  const rowClass = "flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-800/60 transition-colors cursor-pointer";
+                  const rowClass = "group flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-800/60 transition-colors cursor-pointer";
                   const inner = (
                     <>
                       <span className={`shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg ${cfg.bg} ${cfg.text}`}>
@@ -727,6 +750,13 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
                           <span className="block text-[10px] text-neutral-400 truncate">{item.tags.map((t) => t.name).join(" · ")}</span>
                         )}
                       </span>
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); dispatchMoveRequest(item.id); }}
+                        className="shrink-0 w-7 h-7 flex items-center justify-center rounded bg-neutral-800 hover:bg-blue-600 text-neutral-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
+                        title="Déplacer vers…"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7l4 4-4 4M21 12H8" /></svg>
+                      </button>
                       <span className={`hidden sm:inline text-[11px] px-2 py-0.5 rounded-full border ${cfg.border} ${cfg.text}`}>{cfg.label}</span>
                       <span className="hidden md:inline text-xs text-neutral-400 w-28 text-right">
                         {item.created_at ? format(new Date(item.created_at), "d MMM yyyy", { locale: fr }) : ""}
@@ -734,9 +764,9 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
                     </>
                   );
                   return href ? (
-                    <Link key={item.id} href={href} className={rowClass}>{inner}</Link>
+                    <Link key={item.id} href={href} className={rowClass} {...dragProps(item.id)}>{inner}</Link>
                   ) : (
-                    <div key={item.id} onClick={() => handleOpen(item)} className={rowClass}>{inner}</div>
+                    <div key={item.id} onClick={() => handleOpen(item)} className={rowClass} {...dragProps(item.id)}>{inner}</div>
                   );
                 })
               ) : (
@@ -753,13 +783,13 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
                 const href = getLinkHref(item);
                 if (href) {
                   return (
-                    <Link key={item.id} href={href} className={wrapperClass}>
+                    <Link key={item.id} href={href} className={wrapperClass} {...dragProps(item.id)}>
                       {renderCardContent(item)}
                     </Link>
                   );
                 }
                 return (
-                  <div key={item.id} onClick={() => handleOpen(item)} className={wrapperClass}>
+                  <div key={item.id} onClick={() => handleOpen(item)} className={wrapperClass} {...dragProps(item.id)}>
                     {renderCardContent(item)}
                   </div>
                 );
