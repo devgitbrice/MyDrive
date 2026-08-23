@@ -18,7 +18,11 @@ export default async function MyDrivePage() {
     return !max || d > max ? d : max;
   }, null);
   const lastUpdateStr = lastUpdate
-    ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" }).format(lastUpdate)
+    ? new Intl.DateTimeFormat("fr-FR", {
+        dateStyle: "short",
+        timeStyle: "short",
+        timeZone: "Europe/Paris",
+      }).format(lastUpdate)
     : null;
 
   return (
@@ -37,8 +41,8 @@ export default async function MyDrivePage() {
 
         <div className="flex flex-col items-end gap-2 ml-auto">
           {lastUpdateStr && (
-            <span className="text-xs text-neutral-500" title="Dernière mise à jour">
-              Dernière MAJ : <span className="text-neutral-300">{lastUpdateStr}</span>
+            <span className="text-xs text-neutral-500" title="Dernière mise à jour (heure de Paris)">
+              Dernière MAJ : <span className="text-neutral-300">{lastUpdateStr}</span>
             </span>
           )}
           <div className="flex flex-wrap items-center justify-end gap-3">
