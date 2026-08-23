@@ -328,23 +328,12 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     return result;
   }, [items, searchQuery, selectedTagId, selectedDocType]);
 
-
-
-
-
-
-
-
-
 // --- STATISTIQUES TAGS CORRIGÉES ---
   const tagCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    
     items.forEach((item) => {
-      // On vérifie si item.tags existe et est un tableau
       if (Array.isArray(item.tags)) {
         item.tags.forEach((tag: any) => {
-          // Supabase peut renvoyer soit {id: '...'} soit {tag_id: '...'}
           const tagId = tag.id || tag.tag_id;
           if (tagId) {
             counts[tagId] = (counts[tagId] || 0) + 1;
@@ -352,18 +341,12 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
         });
       }
     });
-
     return counts;
   }, [items]);
 
   const noTagsCount = useMemo(() => {
     return items.filter((item) => !item.tags || item.tags.length === 0).length;
   }, [items]);
-
-
-
-
-
 
   // --- NAVIGATION CLAVIER ---
   const tagIdList = useMemo<(string | null)[]>(
@@ -401,7 +384,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [navigateTag, selectedIndex]);
 
-  // --- ACTIONS ---
   const handleOpen = (item: MyDriveItem) => {
     const index = filteredItems.findIndex((i) => i.id === item.id);
     setSelectedIndex(index);
@@ -472,12 +454,9 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     { name: "ToutesMesApps", url: "https://toutes-mes-apps.vercel.app/" },
   ];
 
-  // --- LOGIQUE DE ROUTAGE INTELLIGENTE (MODIF) ---
   const getLinkHref = (item: MyDriveItem) => {
     const itemData = item as any;
     if (itemData.type === 'folder') return `/mydrive/folder/${item.id}`;
-
-    // On définit ici vers quel éditeur envoyer chaque doc_type
     switch (itemData.doc_type) {
       case "python": return `/editpython/${item.id}`;
       case "doc": return `/editdoc/${item.id}`;
@@ -485,11 +464,10 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
       case "mindmap": return `/editmindmap/${item.id}`;
       case "presentation": return `/editpresentation/${item.id}`;
       case "voyage": return `/editvoyage/${item.id}`;
-      default: return null; // Les scans photo/PDF retournent null pour ouvrir l'overlay
+      default: return null;
     }
   };
 
-// --- RENDU CARTE (SÉCURISÉ) ---
   const renderCardContent = (item: MyDriveItem) => {
     const itemData = item as any;
     const rawUrl = itemData.image_url ? itemData.image_url.trim() : "";
@@ -498,7 +476,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     const typeConfig = docType ? DOC_TYPE_CONFIG[docType] : null;
     const isPresentation = itemData.doc_type === "presentation";
 
-    // Bouton Supprimer (haut à droite)
     const deleteButton = (
       <button
         onClick={(e) => {
@@ -515,7 +492,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
       </button>
     );
 
-    // Bouton Télécharger (bas à droite)
     const downloadButton = (
       <button
         onClick={(e) => {
@@ -527,21 +503,16 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
         title="Télécharger"
       >
         {docType === "scan" || (!itemData.doc_type && validUrl) ? (
-          /* PDF / Photo / Scan → flèche téléchargement */
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
           </svg>
         ) : docType === "doc" ? (
-          /* Doc → icône document W */
           <span className="text-[9px] font-bold leading-none">W</span>
         ) : docType === "presentation" ? (
-          /* Présentation → icône présentation P */
           <span className="text-[9px] font-bold leading-none">P</span>
         ) : docType === "table" ? (
-          /* Table → icône tableur X */
           <span className="text-[9px] font-bold leading-none">X</span>
         ) : (
-          /* Défaut → flèche téléchargement */
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
           </svg>
@@ -556,7 +527,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
             {(slideIndex) => (
               <>
                 <MiniSlidePreview content={item.content || ""} slideIndex={slideIndex} />
-                {/* Badge type en haut à gauche */}
                 {typeConfig && (
                   <div className={`absolute top-2 left-2 z-10 flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border shadow-sm ${typeConfig.bg} ${typeConfig.text} ${typeConfig.border}`}>
                     {typeConfig.icon}
@@ -582,7 +552,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
               </div>
             )}
 
-            {/* Badge type en haut à gauche avec icône colorée */}
             {itemData.type === 'folder' ? (
               <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border shadow-sm bg-yellow-500/20 text-yellow-300 border-yellow-500/40">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z" /></svg>
@@ -595,7 +564,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
               </div>
             ) : null}
 
-            {/* Bouton Supprimer en haut à droite */}
             {deleteButton}
           </div>
         )}
@@ -603,7 +571,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
         <div className="p-3 flex flex-col gap-1 bg-neutral-900 border-t border-neutral-800">
           <div className="flex items-center justify-between gap-2">
             <h3 className="font-medium text-neutral-200 truncate text-sm group-hover:text-blue-400 transition-colors flex-1 min-w-0">{item.title}</h3>
-            {/* Bouton Télécharger en bas à droite */}
             {downloadButton}
           </div>
           <div className="flex items-center gap-2 text-[10px] text-neutral-500 uppercase tracking-wide">
@@ -637,7 +604,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     <>
       <div className="flex gap-6">
         <aside className="hidden md:block w-48 shrink-0 space-y-6">
-          {/* FILTRE PAR TYPE */}
           <div>
             <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wide mb-3">Type</h3>
             <nav className="space-y-1">
@@ -657,7 +623,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
             </nav>
           </div>
 
-          {/* FILTRE PAR TAG */}
           {allTags.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wide mb-3">Tags</h3>
@@ -686,7 +651,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
 
         <section className="space-y-4 min-h-[80vh] flex flex-col flex-1 min-w-0">
           <div className="flex flex-col gap-3">
-            {/* Mobile: filtre par type */}
             <div className="md:hidden overflow-x-auto pb-1">
               <div className="flex gap-2 min-w-max">
                 <button onClick={() => setSelectedDocType(null)} className={`px-3 py-1.5 rounded-full text-sm ${!selectedDocType ? "bg-blue-600 text-white" : "bg-neutral-800 text-neutral-400"}`}>Tous</button>
@@ -696,7 +660,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
               </div>
             </div>
 
-            {/* Mobile: filtre par tag */}
             {allTags.length > 0 && (
               <div className="md:hidden overflow-x-auto pb-1">
                 <div className="flex gap-2 min-w-max">
@@ -745,27 +708,27 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
           </div>
 
           {viewMode === "list" ? (
-            <div className="flex flex-col divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden flex-1">
+            <div className="flex flex-col divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden flex-1 bg-neutral-900">
               {filteredItems.length > 0 ? (
                 filteredItems.map((item) => {
                   const itemData = item as any;
                   const type = itemData.doc_type || (itemData.image_url ? "photo" : "doc");
                   const cfg = DOC_TYPE_CONFIG[type] || DOC_TYPE_CONFIG.doc;
                   const href = getLinkHref(item);
-                  const rowClass = "flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-800/50 transition-colors cursor-pointer";
+                  const rowClass = "flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-800/60 transition-colors cursor-pointer";
                   const inner = (
                     <>
                       <span className={`shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg ${cfg.bg} ${cfg.text}`}>
                         {cfg.icon}
                       </span>
                       <span className="flex-1 min-w-0">
-                        <span className="block text-sm text-white truncate">{item.title || "(sans titre)"}</span>
+                        <span className="block text-sm text-neutral-100 truncate">{item.title || "(sans titre)"}</span>
                         {item.tags && item.tags.length > 0 && (
-                          <span className="block text-[10px] text-neutral-500 truncate">{item.tags.map((t) => t.name).join(" · ")}</span>
+                          <span className="block text-[10px] text-neutral-400 truncate">{item.tags.map((t) => t.name).join(" · ")}</span>
                         )}
                       </span>
                       <span className={`hidden sm:inline text-[11px] px-2 py-0.5 rounded-full border ${cfg.border} ${cfg.text}`}>{cfg.label}</span>
-                      <span className="hidden md:inline text-xs text-neutral-500 w-28 text-right">
+                      <span className="hidden md:inline text-xs text-neutral-400 w-28 text-right">
                         {item.created_at ? format(new Date(item.created_at), "d MMM yyyy", { locale: fr }) : ""}
                       </span>
                     </>
@@ -787,10 +750,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
             {filteredItems.length > 0 ? (
               filteredItems.map((item) => {
                 const wrapperClass = "group relative flex flex-col bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-blue-500 transition-all hover:shadow-lg hover:shadow-blue-900/20 cursor-pointer";
-                
-                // MODIF LOGIQUE D'OUVERTURE ICI
                 const href = getLinkHref(item);
-
                 if (href) {
                   return (
                     <Link key={item.id} href={href} className={wrapperClass}>
@@ -798,7 +758,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
                     </Link>
                   );
                 }
-                
                 return (
                   <div key={item.id} onClick={() => handleOpen(item)} className={wrapperClass}>
                     {renderCardContent(item)}
@@ -839,7 +798,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
         />
       )}
 
-      {/* Modal de confirmation de suppression */}
       {deleteConfirmItem && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setDeleteConfirmItem(null)}>
           <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
