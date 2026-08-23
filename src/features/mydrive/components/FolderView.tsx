@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Folder as FolderIcon, FolderPlus, ChevronRight, Home, Trash2, Pencil } from "lucide-react";
 import type { MyDriveItem, Tag } from "@/features/mydrive/types";
 import { createFolder, moveItem, deleteFolder, renameFolder } from "@/features/mydrive/lib/folders";
+import { supabase } from "@/lib/supabaseClient";
 import MyDriveGallery from "./MyDriveGallery";
 
 const UNFILED = "__unfiled__";
@@ -25,6 +26,45 @@ export default function FolderView({ items, allTags }: Props) {
   const [newName, setNewName] = useState("");
   const [dragOverId, setDragOverId] = useState<string | null | "__ROOT__">(null);
   const [moveTarget, setMoveTarget] = useState<MyDriveItem | null>(null);
+
+  // --- Rafraîchissement automatique (debounced) ---
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRefresh = () => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => router.refresh(), 400);
+  };
+
+  // 1) Supabase Realtime : abonnement aux changements de MyDrive
+  //    (nécessite : `alter publication supabase_realtime add table "MyDrive";`)
+  useEffect(() => {
+    const channel = supabase
+      .channel("mydrive-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "MyDrive" },
+        () => scheduleRefresh()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 2) Fallback : rafraîchit quand l'onglet redevient visible / au focus fenêtre
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") scheduleRefresh();
+    };
+    const onFocus = () => scheduleRefresh();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Cookie « dossier courant » pour les créations côté serveur
   useEffect(() => {
