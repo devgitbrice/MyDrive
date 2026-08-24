@@ -185,15 +185,37 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (selectedIndex >= 0) return;
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (e.key === "ArrowDown") { e.preventDefault(); navigateTag("down"); }
-      else if (e.key === "ArrowUp") { e.preventDefault(); navigateTag("up"); }
-      else if (e.key === "Escape" && previewHref) { setPreviewHref(null); }
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        if (target.isContentEditable) return;
+      }
+      if (e.key === "Escape" && previewHref) { setPreviewHref(null); return; }
+      const isPrev = e.key === "ArrowUp" || e.key === "ArrowLeft";
+      const isNext = e.key === "ArrowDown" || e.key === "ArrowRight";
+      if (!isPrev && !isNext) return;
+      // Fichiers éditables du dossier courant (ceux ouvrables dans un iframe)
+      const editable = filteredItems
+        .map((it) => ({ item: it, href: getLinkHref(it) }))
+        .filter((x) => isEditorHref(x.href)) as { item: MyDriveItem; href: string }[];
+      if (editable.length === 0) return;
+      e.preventDefault();
+      let idx = previewHref ? editable.findIndex((x) => x.href === previewHref) : -1;
+      if (idx === -1) {
+        // Rien d'ouvert : on démarre au premier (Next) ou dernier (Prev)
+        idx = isNext ? 0 : editable.length - 1;
+      } else {
+        idx = isNext ? Math.min(idx + 1, editable.length - 1) : Math.max(idx - 1, 0);
+      }
+      const next = editable[idx];
+      setPreviewHref(next.href);
+      setPreviewTitle(next.item.title || "");
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigateTag, selectedIndex, previewHref]);
+  }, [selectedIndex, previewHref, filteredItems]);
 
   const handleOpen = (item: MyDriveItem) => { const index = filteredItems.findIndex((i) => i.id === item.id); setSelectedIndex(index); };
 
@@ -337,29 +359,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
   return (
     <>
       <div className={`flex gap-6 ${previewHref ? "lg:pr-[45vw]" : ""}`}>
-        <aside className="hidden md:block w-48 shrink-0 space-y-6">
-          <div>
-            <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wide mb-3">Type</h3>
-            <nav className="space-y-1">
-              <button onClick={() => setSelectedDocType(null)} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${!selectedDocType ? "bg-blue-600 text-white" : "text-neutral-400 hover:text-white hover:bg-neutral-800"}`}>Tous ({items.length})</button>
-              {contentTypes.map((ct) => { const count = docTypeCounts[ct.key] || 0; if (count === 0) return null; return (<button key={ct.key} onClick={() => setSelectedDocType(selectedDocType === ct.key ? null : ct.key)} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex justify-between ${selectedDocType === ct.key ? "bg-blue-600 text-white" : "text-neutral-400 hover:text-white hover:bg-neutral-800"}`}><span>{ct.label}</span><span className="opacity-60 text-xs py-0.5">({count})</span></button>); })}
-            </nav>
-          </div>
-          {allTags.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wide mb-3">Tags</h3>
-              <nav className="space-y-1">
-                <button onClick={() => setSelectedTagId(null)} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${!selectedTagId ? "bg-blue-600 text-white" : "text-neutral-400 hover:text-white hover:bg-neutral-800"}`}>Tous</button>
-                {allTags.map((tag) => (<button key={tag.id} onClick={() => setSelectedTagId(selectedTagId === tag.id ? null : tag.id)} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex justify-between ${selectedTagId === tag.id ? "bg-blue-600 text-white" : "text-neutral-400 hover:text-white hover:bg-neutral-800"}`}><span>{tag.name}</span><span className="opacity-60 text-xs py-0.5">({tagCounts[tag.id] || 0})</span></button>))}
-                {noTagsCount > 0 && (
-                  <div className="border-t border-neutral-800 mt-2 pt-2">
-                    <button onClick={() => setSelectedTagId(selectedTagId === NO_TAGS ? null : NO_TAGS)} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex justify-between ${selectedTagId === NO_TAGS ? "bg-blue-600 text-white" : "text-neutral-400 hover:text-white hover:bg-neutral-800"}`}><span>Sans Tags</span><span className="opacity-60 text-xs py-0.5">({noTagsCount})</span></button>
-                  </div>
-                )}
-              </nav>
-            </div>
-          )}
-        </aside>
         <section className="space-y-4 min-h-[80vh] flex flex-col flex-1 min-w-0">
           <div className="flex flex-col gap-3">
             <div className="md:hidden overflow-x-auto pb-1">
