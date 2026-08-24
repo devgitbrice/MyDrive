@@ -9,6 +9,7 @@ import { createFolder, moveItem, deleteFolder, renameFolder } from "@/features/m
 import { supabase } from "@/lib/supabaseClient";
 import MyDriveGallery from "./MyDriveGallery";
 import PendingCard from "./PendingCard";
+import ItemCodeBadge from "./ItemCodeBadge";
 
 const UNFILED = "__unfiled__";
 
@@ -295,6 +296,9 @@ export default function FolderView({ items, allTags }: Props) {
                   <span className="text-sm text-white truncate w-full text-center">{f.title}</span>
                   <span className="text-xs text-neutral-500 mt-0.5">{count} élément{count > 1 ? "s" : ""}</span>
                 </Link>
+                <div className="absolute top-2 left-2">
+                  <ItemCodeBadge id={f.id} />
+                </div>
                 <div className="absolute top-2 right-2 hidden group-hover:flex gap-1">
                   <button
                     onClick={(e) => { e.preventDefault(); handleRenameFolder(f); }}

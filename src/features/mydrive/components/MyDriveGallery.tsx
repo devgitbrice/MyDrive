@@ -10,6 +10,9 @@ import { updateDriveItemAction, deleteDriveItemAction } from "@/features/mydrive
 import { parseSlides } from "@/presentation/types";
 import { downloadItemAsFile } from "@/features/mydrive/lib/downloadItem";
 import { supabase } from "@/lib/supabaseClient";
+import ItemCodeBadge from "@/features/mydrive/components/ItemCodeBadge";
+import { useItemCodes } from "@/features/mydrive/components/ItemCodeProvider";
+import { codeFromId } from "@/features/mydrive/lib/itemCode";
 
 const DOC_TYPE_CONFIG: Record<string, { icon: React.ReactNode; bg: string; text: string; border: string; label: string }> = {
   doc: { label: "Doc", bg: "bg-blue-500/20", text: "text-blue-400", border: "border-blue-500/40",
@@ -159,6 +162,9 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     return () => { supabase.removeChannel(channel); };
   }, [previewHref]);
 
+  const itemCodes = useItemCodes();
+  const codeOf = useCallback((id: string) => itemCodes?.[id] ?? codeFromId(id), [itemCodes]);
+
   const imageHeightClass = useMemo(() => { if (size <= 33) return "h-36 md:h-40"; if (size <= 66) return "h-48 md:h-56"; return "h-64 md:h-72"; }, [size]);
   const gridClass = useMemo(() => { if (size <= 33) return "grid-cols-2 md:grid-cols-3 lg:grid-cols-4"; if (size <= 66) return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"; return "grid-cols-1 md:grid-cols-2"; }, [size]);
 
@@ -173,9 +179,9 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     let result = items;
     if (selectedDocType) { result = result.filter((item) => { const itemData = item as any; if (selectedDocType === "photo") { return !itemData.doc_type && itemData.image_url; } return itemData.doc_type === selectedDocType; }); }
     if (selectedTagId === NO_TAGS) { result = result.filter((item) => !item.tags || item.tags.length === 0); } else if (selectedTagId) { result = result.filter((item) => item.tags?.some((t) => t.id === selectedTagId)); }
-    if (searchQuery.trim()) { const query = searchQuery.toLowerCase(); result = result.filter((item) => item.title.toLowerCase().includes(query) || (item.observation && item.observation.toLowerCase().includes(query))); }
+    if (searchQuery.trim()) { const query = searchQuery.toLowerCase(); result = result.filter((item) => item.title.toLowerCase().includes(query) || (item.observation && item.observation.toLowerCase().includes(query)) || codeOf(item.id).toLowerCase().includes(query)); }
     return result;
-  }, [items, searchQuery, selectedTagId, selectedDocType]);
+  }, [items, searchQuery, selectedTagId, selectedDocType, codeOf]);
 
   const tagCounts = useMemo(() => { const counts: Record<string, number> = {}; items.forEach((item) => { if (Array.isArray(item.tags)) { item.tags.forEach((tag: any) => { const tagId = tag.id || tag.tag_id; if (tagId) counts[tagId] = (counts[tagId] || 0) + 1; }); } }); return counts; }, [items]);
   const noTagsCount = useMemo(() => items.filter((item) => !item.tags || item.tags.length === 0).length, [items]);
@@ -338,6 +344,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
         )}
         <div className="p-3 flex flex-col gap-1 bg-neutral-900 border-t border-neutral-800">
           <div className="flex items-center justify-between gap-2">
+            <ItemCodeBadge id={item.id} variant="inline" className="shrink-0" />
             <h3 className="font-medium text-neutral-200 truncate text-sm group-hover:text-blue-400 transition-colors flex-1 min-w-0">{item.title}</h3>
             {downloadButton}
           </div>
@@ -380,7 +387,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
               <div className="text-sm opacity-70">{filteredItems.length} élément{filteredItems.length > 1 ? "s" : ""}</div>
               <div className="flex items-center gap-4 flex-wrap">
                 <div className="relative flex-1 sm:flex-none">
-                  <input type="text" placeholder="Rechercher..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full sm:w-64 bg-neutral-800 text-white border border-neutral-700 rounded-lg px-4 py-1.5 pl-9 outline-none focus:border-blue-500 text-sm" />
+                  <input type="text" placeholder="Rechercher (titre ou code)..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full sm:w-64 bg-neutral-800 text-white border border-neutral-700 rounded-lg px-4 py-1.5 pl-9 outline-none focus:border-blue-500 text-sm" />
                   <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                 </div>
                 <div className="flex items-center gap-2">
@@ -412,6 +419,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
                   const inner = (
                     <>
                       <span className={`shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg ${cfg.bg} ${cfg.text}`}>{cfg.icon}</span>
+                      <ItemCodeBadge id={item.id} variant="inline" className="shrink-0" />
                       <span className="flex-1 min-w-0">
                         <span className="block text-sm text-neutral-100 truncate">{item.title || "(sans titre)"}</span>
                         {item.tags && item.tags.length > 0 && (<span className="block text-[10px] text-neutral-400 truncate">{item.tags.map((t) => t.name).join(" · ")}</span>)}

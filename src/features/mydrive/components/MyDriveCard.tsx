@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { MyDriveItem } from "@/features/mydrive/types";
+import ItemCodeBadge from "@/features/mydrive/components/ItemCodeBadge";
 
 type Props = {
   item?: MyDriveItem;
@@ -201,8 +202,9 @@ export default function MyDriveCard({
           )}
         </div>
 
-        <div className="pt-2 text-xs text-neutral-600 mt-auto">
-          ID: <span className="font-mono">{item.id.slice(0, 8)}…</span>
+        <div className="pt-2 text-xs text-neutral-600 mt-auto flex items-center gap-2">
+          <ItemCodeBadge id={item.id} variant="inline" />
+          <span>ID: <span className="font-mono">{item.id.slice(0, 8)}…</span></span>
         </div>
       </div>
     </article>
