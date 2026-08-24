@@ -22,6 +22,8 @@ export interface MyDriveItem {
   type: string;
   doc_type?: string;
   parent_id?: string | null;
+  /** Code 3 lettres personnalise. NULL/absent => code derive de l'id. */
+  code?: string | null;
   tags?: Tag[];
 }
 

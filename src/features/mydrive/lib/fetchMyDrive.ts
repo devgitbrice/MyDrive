@@ -24,6 +24,7 @@ export async function fetchMyDrive(): Promise<MyDriveItem[]> {
       type,
       parent_id,
       created_at,
+      code,
       mydrive_tags (
         tags (
           id,
@@ -67,6 +68,7 @@ export async function fetchMyDrive(): Promise<MyDriveItem[]> {
       type: row.type || "file",
       doc_type: row.doc_type || "scan",
       parent_id: row.parent_id ?? null,
+      code: row.code ?? null,
       tags: flattenedTags,
     };
   });
