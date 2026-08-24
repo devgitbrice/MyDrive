@@ -2,8 +2,10 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import DocExportMenu from "@/components/DocExportMenu";
 import { useThemeStore } from "@/store/themeStore";
+import ItemCodeBadge from "@/features/mydrive/components/ItemCodeBadge";
 
 interface DocHeaderProps {
+  id?: string;
   title: string;
   observation: string;
   status: "idle" | "saving" | "saved";
@@ -13,6 +15,7 @@ interface DocHeaderProps {
 }
 
 export default function DocHeader({
+  id,
   title,
   observation,
   status,
@@ -36,6 +39,8 @@ export default function DocHeader({
           placeholder="Titre du document..."
           className={`flex-1 bg-transparent text-xl font-bold outline-none ${light ? "text-neutral-900 placeholder-neutral-400" : "text-white placeholder-neutral-600"}`}
         />
+
+        {id && <ItemCodeBadge id={id} variant="inline" />}
 
         <span className={`text-xs px-2 py-1 rounded-full transition-all shrink-0 ${
           status === "saving" ? "bg-yellow-600/20 text-yellow-400" :

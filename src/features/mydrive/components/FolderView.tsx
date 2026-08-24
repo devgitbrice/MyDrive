@@ -247,6 +247,15 @@ export default function FolderView({ items, allTags }: Props) {
         ))}
       </nav>
 
+      {folderId && folderId !== UNFILED && breadcrumb.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
+            {breadcrumb[breadcrumb.length - 1].title}
+          </h1>
+          <ItemCodeBadge id={folderId} variant="inline" />
+        </div>
+      )}
+
       {folderId !== UNFILED && (
         <div className="flex items-center gap-2 flex-wrap">
           {creating ? (

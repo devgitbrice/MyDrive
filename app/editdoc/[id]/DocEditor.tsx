@@ -200,7 +200,7 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
     <div className={`flex flex-col h-dvh w-full overflow-hidden ${light ? "bg-white text-neutral-900" : "bg-neutral-950 text-white"} ${chromeVisible ? "" : "cursor-none"}`}>
       <FileSearchModal open={fileSearchOpen} onClose={() => setFileSearchOpen(false)} onInsert={handleInsertDocLink} />
       <div className={chromeClass}>
-        <DocHeader title={title} observation={observation} status={status} onTitleChange={handleTitleChange} onObservationChange={handleObservationChange} getContent={() => contentRef.current} />
+        <DocHeader id={initialData.id} title={title} observation={observation} status={status} onTitleChange={handleTitleChange} onObservationChange={handleObservationChange} getContent={() => contentRef.current} />
         <DocRibbon tocOpen={tocOpen} setTocOpen={setTocOpen} />
       </div>
 
