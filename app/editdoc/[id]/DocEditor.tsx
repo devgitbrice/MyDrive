@@ -207,37 +207,6 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
       {/* key={contentKey} force le re-mount du BlockManager quand un changement Realtime arrive */}
       <BlockManager key={contentKey} initialHtml={contentSnapshot} tocOpen={tocOpen} onChange={handleContentChange} chromeVisible={chromeVisible} docTitle={title} />
 
-      {/* Tags panel — always visible on desktop, toggle on mobile */}
-      <div className={`${light ? "bg-neutral-100 border-neutral-300" : "bg-neutral-900 border-neutral-800"} border-t shrink-0 ${chromeClass}`}>
-        {/* Desktop: always show tags */}
-        <div className="hidden md:block p-3">
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest shrink-0">Tags :</span>
-            <div className="flex-1 overflow-x-auto">
-              <TagSelector itemId={initialData.id} itemTags={selectedTags} allTags={allTags} onTagsChange={(_id, newTags) => setSelectedTags(newTags)} onNewTagCreated={(tag) => setAllTags((prev) => [...prev, tag])} />
-            </div>
-          </div>
-        </div>
-        {/* Mobile: toggle button + collapsible tags */}
-        <div className="md:hidden">
-          {mobileTagsOpen && (
-            <div className="p-3 pb-2">
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest shrink-0">Tags :</span>
-                <div className="flex-1 overflow-x-auto">
-                  <TagSelector itemId={initialData.id} itemTags={selectedTags} allTags={allTags} onTagsChange={(_id, newTags) => setSelectedTags(newTags)} onNewTagCreated={(tag) => setAllTags((prev) => [...prev, tag])} />
-                </div>
-              </div>
-            </div>
-          )}
-          <button
-            onClick={() => setMobileTagsOpen((v) => !v)}
-            className={`w-full py-2.5 text-xs font-semibold tracking-wide ${light ? "text-blue-600 active:bg-neutral-200" : "text-blue-400 active:bg-neutral-800"}`}
-          >
-            {mobileTagsOpen ? "Cacher les tags" : "Tags"}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
