@@ -1,13 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Settings, Plus } from "lucide-react";
+import { Settings } from "lucide-react";
 import { fetchMyDrive, fetchAllTags } from "@/features/mydrive/lib/fetchMyDrive";
 import FolderView from "@/features/mydrive/components/FolderView";
 import { ItemCodeProvider } from "@/features/mydrive/components/ItemCodeProvider";
-import CreateVoyageButton from "@/features/voyage/components/CreateVoyageButton";
-import AddFileButton from "@/components/AddFileButton";
-import AddPendingDocButton from "@/components/AddPendingDocButton";
-import AddDrawButton from "@/components/AddDrawButton";
+import AddMenu from "@/components/AddMenu";
 import ThemeToggle from "@/components/ThemeToggle";
 
 // Re-render a chaque requete pour que les mutations Supabase externes
@@ -53,25 +50,7 @@ export default async function MyDrivePage() {
             </span>
           )}
           <div className="flex flex-wrap items-center justify-end gap-3">
-            <Link href="/newdoc" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white transition-colors">
-              <Plus size={16} /> Doc
-            </Link>
-            <Link href="/newpython" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors">
-              <Plus size={16} /> Python
-            </Link>
-            <Link href="/newmindmap" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border border-purple-600 text-purple-400 hover:bg-purple-600 hover:text-white transition-colors">
-              <Plus size={16} /> Mindmap
-            </Link>
-            <Link href="/newtable" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border border-green-600 text-green-400 hover:bg-green-600 hover:text-white transition-colors">
-              <Plus size={16} /> Table
-            </Link>
-            <Link href="/newpresentation" className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold border border-orange-600 text-orange-400 hover:bg-orange-600 hover:text-white transition-colors">
-              <Plus size={16} /> Presentation
-            </Link>
-            <CreateVoyageButton />
-            <AddDrawButton />
-            <AddFileButton />
-            <AddPendingDocButton />
+            <AddMenu />
           </div>
         </div>
       </header>
