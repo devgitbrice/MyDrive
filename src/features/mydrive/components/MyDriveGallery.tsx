@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabaseClient";
 import ItemCodeBadge from "@/features/mydrive/components/ItemCodeBadge";
 import { useItemCodes } from "@/features/mydrive/components/ItemCodeProvider";
 import { codeFromId } from "@/features/mydrive/lib/itemCode";
+import { deleteMirror } from "@/features/mydrive/lib/mirror";
 
 const DOC_TYPE_CONFIG: Record<string, { icon: React.ReactNode; bg: string; text: string; border: string; label: string }> = {
   doc: { label: "Doc", bg: "bg-blue-500/20", text: "text-blue-400", border: "border-blue-500/40",
@@ -84,7 +85,10 @@ function PresentationCardWrapper({ item, imageHeightClass, children }: { item: M
   );
 }
 
+// Deplacer/glisser un miroir agit sur la ligne alias, pas sur l'original.
+function placementId(item: MyDriveItem) { return item.alias_id ?? item.id; }
 function dispatchMoveRequest(id: string) { window.dispatchEvent(new CustomEvent("mydrive-request-move", { detail: { id } })); }
+function dispatchMirrorRequest(id: string) { window.dispatchEvent(new CustomEvent("mydrive-request-mirror", { detail: { id } })); }
 function dragProps(id: string) { return { draggable: true, onDragStart: (e: React.DragEvent<HTMLElement>) => { e.dataTransfer.setData("text/mydrive-item", id); e.dataTransfer.effectAllowed = "move"; } }; }
 
 function isEditorHref(href: string | null): boolean {
@@ -244,12 +248,12 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
   const handleTagsChange = (itemId: string, newTags: Tag[]) => { setItems((prevItems) => prevItems.map((item) => item.id === itemId ? { ...item, tags: newTags } : item)); };
   const handleNewTagCreated = (tag: Tag) => { setAllTags((prev) => { if (prev.some((t) => t.id === tag.id)) return prev; return [...prev, tag].sort((a, b) => a.name.localeCompare(b.name)); }); };
 
-  const handleDeleteItem = async (id: string, imagePath: string) => {
+  const handleDeleteItem = async (id: string, imagePath: string, aliasId?: string | null) => {
     const previousItems = [...items];
     const deletedIndex = items.findIndex((item) => item.id === id);
     setItems((prevItems) => prevItems.filter((item) => item.id !== id));
     if (selectedIndex >= 0) { if (items.length <= 1) setSelectedIndex(-1); else if (selectedIndex >= deletedIndex && selectedIndex > 0) setSelectedIndex(selectedIndex - 1); }
-    try { await deleteDriveItemAction(id, imagePath); }
+    try { if (aliasId) await deleteMirror(aliasId); else await deleteDriveItemAction(id, imagePath); }
     catch (error) { console.error("Erreur suppression", error); setItems(previousItems); alert("Erreur lors de la suppression."); }
   };
 
@@ -289,8 +293,19 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
       </button>
     );
+    const mirrorButton = (
+      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); dispatchMirrorRequest(item.id); }} className="absolute top-2 right-20 z-20 w-7 h-7 flex items-center justify-center rounded-lg bg-neutral-800/90 hover:bg-purple-600 text-neutral-200 hover:text-white backdrop-blur-md border border-neutral-700 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity" title="Créer un miroir dans…">
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5M10.172 13.828a4 4 0 005.656 0l3-3a4 4 0 10-5.656-5.656l-1.5 1.5" /></svg>
+      </button>
+    );
+    const mirrorTag = itemData.is_mirror ? (
+      <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border shadow-sm bg-purple-500/20 text-purple-300 border-purple-500/40" title="Miroir : l'original est rangé ailleurs">
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5M10.172 13.828a4 4 0 005.656 0l3-3a4 4 0 10-5.656-5.656l-1.5 1.5" /></svg>
+        <span>Miroir</span>
+      </div>
+    ) : null;
     const moveButton = (
-      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); dispatchMoveRequest(item.id); }} className="absolute top-2 right-11 z-20 w-7 h-7 flex items-center justify-center rounded-lg bg-neutral-800/90 hover:bg-blue-600 text-neutral-200 hover:text-white backdrop-blur-md border border-neutral-700 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity" title="Déplacer vers…">
+      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); dispatchMoveRequest(placementId(item)); }} className="absolute top-2 right-11 z-20 w-7 h-7 flex items-center justify-center rounded-lg bg-neutral-800/90 hover:bg-blue-600 text-neutral-200 hover:text-white backdrop-blur-md border border-neutral-700 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity" title="Déplacer vers…">
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7l4 4-4 4M21 12H8" /></svg>
       </button>
     );
@@ -311,8 +326,10 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
               <>
                 <MiniSlidePreview content={item.content || ""} slideIndex={slideIndex} />
                 {typeConfig && (<div className={`absolute top-2 left-2 z-10 flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border shadow-sm ${typeConfig.bg} ${typeConfig.text} ${typeConfig.border}`}>{typeConfig.icon}<span>{typeConfig.label}</span></div>)}
+                {mirrorButton}
                 {moveButton}
                 {deleteButton}
+                {mirrorTag}
               </>
             )}
           </PresentationCardWrapper>
@@ -338,8 +355,10 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
             ) : typeConfig ? (
               <div className={`absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border shadow-sm ${typeConfig.bg} ${typeConfig.text} ${typeConfig.border}`}>{typeConfig.icon}<span>{typeConfig.label}</span></div>
             ) : null}
+            {mirrorButton}
             {moveButton}
             {deleteButton}
+            {mirrorTag}
           </div>
         )}
         <div className="p-3 flex flex-col gap-1 bg-neutral-900 border-t border-neutral-800">
@@ -424,7 +443,13 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
                         <span className="block text-sm text-neutral-100 truncate">{item.title || "(sans titre)"}</span>
                         {item.tags && item.tags.length > 0 && (<span className="block text-[10px] text-neutral-400 truncate">{item.tags.map((t) => t.name).join(" · ")}</span>)}
                       </span>
-                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); dispatchMoveRequest(item.id); }} className="shrink-0 w-7 h-7 flex items-center justify-center rounded bg-neutral-800 hover:bg-blue-600 text-neutral-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all" title="Déplacer vers…">
+                      {item.is_mirror && (
+                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40" title="Miroir : l'original est rangé ailleurs">Miroir</span>
+                      )}
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); dispatchMirrorRequest(item.id); }} className="shrink-0 w-7 h-7 flex items-center justify-center rounded bg-neutral-800 hover:bg-purple-600 text-neutral-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all" title="Créer un miroir dans…">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5M10.172 13.828a4 4 0 005.656 0l3-3a4 4 0 10-5.656-5.656l-1.5 1.5" /></svg>
+                      </button>
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); dispatchMoveRequest(placementId(item)); }} className="shrink-0 w-7 h-7 flex items-center justify-center rounded bg-neutral-800 hover:bg-blue-600 text-neutral-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all" title="Déplacer vers…">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7l4 4-4 4M21 12H8" /></svg>
                       </button>
                       <span className={`hidden sm:inline text-[11px] px-2 py-0.5 rounded-full border ${cfg.border} ${cfg.text}`}>{cfg.label}</span>
@@ -432,9 +457,9 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
                     </>
                   );
                   return href ? (
-                    <Link key={item.id} href={href} className={rowClass} {...dragProps(item.id)} onClick={(e) => handleListRowClick(e, item, href)}>{inner}</Link>
+                    <Link key={item.id} href={href} className={rowClass} {...dragProps(placementId(item))} onClick={(e) => handleListRowClick(e, item, href)}>{inner}</Link>
                   ) : (
-                    <div key={item.id} onClick={() => handleOpen(item)} className={rowClass} {...dragProps(item.id)}>{inner}</div>
+                    <div key={item.id} onClick={() => handleOpen(item)} className={rowClass} {...dragProps(placementId(item))}>{inner}</div>
                   );
                 })
               ) : (
@@ -447,8 +472,8 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
               filteredItems.map((item) => {
                 const wrapperClass = "group relative flex flex-col bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-blue-500 transition-all hover:shadow-lg hover:shadow-blue-900/20 cursor-pointer";
                 const href = getLinkHref(item);
-                if (href) { return (<Link key={item.id} href={href} className={wrapperClass} {...dragProps(item.id)}>{renderCardContent(item)}</Link>); }
-                return (<div key={item.id} onClick={() => handleOpen(item)} className={wrapperClass} {...dragProps(item.id)}>{renderCardContent(item)}</div>);
+                if (href) { return (<Link key={item.id} href={href} className={wrapperClass} {...dragProps(placementId(item))}>{renderCardContent(item)}</Link>); }
+                return (<div key={item.id} onClick={() => handleOpen(item)} className={wrapperClass} {...dragProps(placementId(item))}>{renderCardContent(item)}</div>);
               })
             ) : (
               <div className="col-span-full flex flex-col items-center justify-center py-16 text-neutral-500">
@@ -494,11 +519,17 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
       {deleteConfirmItem && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setDeleteConfirmItem(null)}>
           <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-white mb-2">Supprimer ce fichier ?</h3>
-            <p className="text-neutral-400 text-sm mb-6">Voulez-vous vraiment supprimer <span className="text-white font-medium">&quot;{deleteConfirmItem.title}&quot;</span> ? Cette action est irréversible.</p>
+            <h3 className="text-lg font-semibold text-white mb-2">{deleteConfirmItem.is_mirror ? "Retirer ce miroir ?" : "Supprimer ce fichier ?"}</h3>
+            <p className="text-neutral-400 text-sm mb-6">
+              {deleteConfirmItem.is_mirror ? (
+                <>Retirer le miroir de <span className="text-white font-medium">&quot;{deleteConfirmItem.title}&quot;</span> de ce dossier ? L&apos;original et les autres miroirs sont conservés.</>
+              ) : (
+                <>Voulez-vous vraiment supprimer <span className="text-white font-medium">&quot;{deleteConfirmItem.title}&quot;</span> ? Cette action est irréversible{" "}— ses miroirs éventuels disparaîtront aussi.</>
+              )}
+            </p>
             <div className="flex gap-3 justify-end">
               <button onClick={() => setDeleteConfirmItem(null)} className="px-4 py-2 text-sm text-neutral-300 hover:text-white rounded-lg hover:bg-neutral-800 transition-colors">Annuler</button>
-              <button onClick={() => { handleDeleteItem(deleteConfirmItem.id, deleteConfirmItem.image_path || ""); setDeleteConfirmItem(null); }} className="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors">Supprimer</button>
+              <button onClick={() => { handleDeleteItem(deleteConfirmItem.id, deleteConfirmItem.image_path || "", deleteConfirmItem.alias_id); setDeleteConfirmItem(null); }} className="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors">Supprimer</button>
             </div>
           </div>
         </div>

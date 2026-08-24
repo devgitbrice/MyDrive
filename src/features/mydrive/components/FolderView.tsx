@@ -3,9 +3,10 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Folder as FolderIcon, FolderPlus, ChevronRight, Home, Trash2, Pencil } from "lucide-react";
+import { Folder as FolderIcon, FolderPlus, ChevronRight, Home, Trash2, Pencil, Link2 } from "lucide-react";
 import type { MyDriveItem, Tag } from "@/features/mydrive/types";
 import { createFolder, moveItem, deleteFolder, renameFolder } from "@/features/mydrive/lib/folders";
+import { createMirror, mirrorBlocker } from "@/features/mydrive/lib/mirror";
 import { supabase } from "@/lib/supabaseClient";
 import MyDriveGallery from "./MyDriveGallery";
 import PendingCard from "./PendingCard";
@@ -31,7 +32,8 @@ export default function FolderView({ items, allTags }: Props) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [dragOverId, setDragOverId] = useState<string | null | "__ROOT__">(null);
-  const [moveTarget, setMoveTarget] = useState<MyDriveItem | null>(null);
+  // Selecteur de dossier, partage entre « Deplacer vers » et « Creer un miroir dans ».
+  const [picker, setPicker] = useState<{ mode: "move" | "mirror"; item: MyDriveItem } | null>(null);
 
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleRefresh = () => {
@@ -74,13 +76,24 @@ export default function FolderView({ items, allTags }: Props) {
   }, [folderId]);
 
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { id: string };
-      const it = items.find((i) => i.id === detail.id);
-      if (it) setMoveTarget(it);
+    // Deplacer : l'id recu est celui de l'emplacement (ligne alias pour un miroir).
+    const onMove = (e: Event) => {
+      const { id } = (e as CustomEvent).detail as { id: string };
+      const it = items.find((i) => i.id === id || i.alias_id === id);
+      if (it) setPicker({ mode: "move", item: it });
     };
-    window.addEventListener("mydrive-request-move", handler);
-    return () => window.removeEventListener("mydrive-request-move", handler);
+    // Miroir : l'id recu est celui de l'element reel.
+    const onMirror = (e: Event) => {
+      const { id } = (e as CustomEvent).detail as { id: string };
+      const it = items.find((i) => i.id === id);
+      if (it) setPicker({ mode: "mirror", item: it });
+    };
+    window.addEventListener("mydrive-request-move", onMove);
+    window.addEventListener("mydrive-request-mirror", onMirror);
+    return () => {
+      window.removeEventListener("mydrive-request-move", onMove);
+      window.removeEventListener("mydrive-request-mirror", onMirror);
+    };
   }, [items]);
 
   const allFolders = useMemo(
@@ -191,11 +204,19 @@ export default function FolderView({ items, allTags }: Props) {
     }
   }
 
-  async function handleMoveTo(destParent: string | null) {
-    if (!moveTarget) return;
+  async function handlePick(destParent: string | null) {
+    if (!picker) return;
+    const { mode, item } = picker;
     try {
-      await moveItem(moveTarget.id, destParent);
-      setMoveTarget(null);
+      if (mode === "mirror") {
+        const blocage = mirrorBlocker(item, destParent, items);
+        if (blocage) { alert(blocage); return; }
+        await createMirror(item, destParent);
+      } else {
+        // Deplacer un miroir deplace le miroir, pas l'original.
+        await moveItem(item.alias_id ?? item.id, destParent);
+      }
+      setPicker(null);
       router.refresh();
     } catch (e: any) {
       alert("Erreur : " + e.message);
@@ -295,11 +316,21 @@ export default function FolderView({ items, allTags }: Props) {
                   <FolderIcon size={48} className="text-yellow-400 mb-2" />
                   <span className="text-sm text-white truncate w-full text-center">{f.title}</span>
                   <span className="text-xs text-neutral-500 mt-0.5">{count} élément{count > 1 ? "s" : ""}</span>
+                  {f.is_mirror && (
+                    <span className="mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40">Miroir</span>
+                  )}
                 </Link>
                 <div className="absolute top-2 left-2">
                   <ItemCodeBadge id={f.id} />
                 </div>
                 <div className="absolute top-2 right-2 hidden group-hover:flex gap-1">
+                  <button
+                    onClick={(e) => { e.preventDefault(); setPicker({ mode: "mirror", item: f }); }}
+                    className="w-7 h-7 rounded bg-neutral-800/90 hover:bg-purple-600 text-neutral-300 hover:text-white flex items-center justify-center"
+                    title="Créer un miroir dans…"
+                  >
+                    <Link2 size={13} />
+                  </button>
                   <button
                     onClick={(e) => { e.preventDefault(); handleRenameFolder(f); }}
                     className="w-7 h-7 rounded bg-neutral-800/90 hover:bg-neutral-700 text-neutral-300 hover:text-white flex items-center justify-center"
@@ -346,14 +377,20 @@ export default function FolderView({ items, allTags }: Props) {
         <p className="text-center text-neutral-500 py-8">Aucun dossier pour le moment. Crée-en un !</p>
       )}
 
-      {moveTarget && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setMoveTarget(null)}>
+      {picker && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setPicker(null)}>
           <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-5 max-w-md w-full mx-4 shadow-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-white mb-1">Déplacer « {moveTarget.title} »</h3>
-            <p className="text-xs text-neutral-500 mb-4">Choisis un dossier de destination :</p>
+            <h3 className="text-lg font-semibold text-white mb-1">
+              {picker.mode === "mirror" ? "Créer un miroir de" : "Déplacer"} « {picker.item.title} »
+            </h3>
+            <p className="text-xs text-neutral-500 mb-4">
+              {picker.mode === "mirror"
+                ? "L'élément restera aussi à sa place actuelle. Les deux emplacements montrent le même contenu : une modification faite d'un côté est visible de l'autre."
+                : "Choisis un dossier de destination :"}
+            </p>
             <div className="overflow-y-auto flex-1 space-y-1">
               <button
-                onClick={() => handleMoveTo(null)}
+                onClick={() => handlePick(null)}
                 className="w-full text-left px-3 py-2 rounded-lg text-sm text-neutral-200 hover:bg-neutral-800 flex items-center gap-2"
               >
                 <Home size={14} /> Racine (Sans dossier)
@@ -361,8 +398,8 @@ export default function FolderView({ items, allTags }: Props) {
               {allFolders.map((f) => (
                 <button
                   key={f.id}
-                  onClick={() => handleMoveTo(f.id)}
-                  disabled={f.id === moveTarget.id}
+                  onClick={() => handlePick(f.id)}
+                  disabled={f.id === picker.item.id}
                   className="w-full text-left px-3 py-2 rounded-lg text-sm text-neutral-200 hover:bg-neutral-800 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <FolderIcon size={14} className="text-yellow-400" /> {f.title}
@@ -373,7 +410,7 @@ export default function FolderView({ items, allTags }: Props) {
               )}
             </div>
             <div className="mt-4 flex justify-end">
-              <button onClick={() => setMoveTarget(null)} className="px-4 py-2 text-sm text-neutral-300 hover:text-white rounded-lg hover:bg-neutral-800">Annuler</button>
+              <button onClick={() => setPicker(null)} className="px-4 py-2 text-sm text-neutral-300 hover:text-white rounded-lg hover:bg-neutral-800">Annuler</button>
             </div>
           </div>
         </div>

@@ -91,6 +91,7 @@ async function main() {
   if (!targetId) throw new Error(`Aucun élément ne porte le code ${parentCode}.`);
 
   const target = (items ?? []).find((i: any) => i.id === targetId);
+  if (!target) throw new Error(`Élément ${parentCode} introuvable après résolution du code.`);
   console.log(`Cible ${parentCode} : « ${target.title} » (${target.type})`);
 
   // Un document ne peut pas contenir de dossier : on se rattache au parent.

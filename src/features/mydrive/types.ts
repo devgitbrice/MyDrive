@@ -24,6 +24,10 @@ export interface MyDriveItem {
   parent_id?: string | null;
   /** Code 3 lettres personnalise. NULL/absent => code derive de l'id. */
   code?: string | null;
+  /** Renseigne quand cet element est affiche depuis un miroir : id de la ligne alias. */
+  alias_id?: string | null;
+  /** true = cet emplacement est un miroir, l'original est range ailleurs. */
+  is_mirror?: boolean;
   tags?: Tag[];
 }
 
