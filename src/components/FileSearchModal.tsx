@@ -27,6 +27,7 @@ export function getEditUrl(item: SearchResult): string {
     case "mindmap": return `/editmindmap/${item.id}`;
     case "presentation": return `/editpresentation/${item.id}`;
     case "voyage": return `/editvoyage/${item.id}`;
+    case "draw": return `/editdraw/${item.id}`;
     default: return `/mydrive`;
   }
 }

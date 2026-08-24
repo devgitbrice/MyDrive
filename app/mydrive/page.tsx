@@ -7,6 +7,7 @@ import { ItemCodeProvider } from "@/features/mydrive/components/ItemCodeProvider
 import CreateVoyageButton from "@/features/voyage/components/CreateVoyageButton";
 import AddFileButton from "@/components/AddFileButton";
 import AddPendingDocButton from "@/components/AddPendingDocButton";
+import AddDrawButton from "@/components/AddDrawButton";
 import ThemeToggle from "@/components/ThemeToggle";
 
 // Re-render a chaque requete pour que les mutations Supabase externes
@@ -68,6 +69,7 @@ export default async function MyDrivePage() {
               <Plus size={16} /> Presentation
             </Link>
             <CreateVoyageButton />
+            <AddDrawButton />
             <AddFileButton />
             <AddPendingDocButton />
           </div>

@@ -13,6 +13,7 @@ function editUrlFor(id: string, docType: string | null): string {
     case "mindmap": return `/editmindmap/${id}`;
     case "presentation": return `/editpresentation/${id}`;
     case "voyage": return `/editvoyage/${id}`;
+    case "draw": return `/editdraw/${id}`;
     default: return `/editdoc/${id}`;
   }
 }
