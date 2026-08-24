@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { updateDriveItemAction } from "@/features/mydrive/modify";
 import TagSelector from "@/features/mydrive/components/TagSelector";
 import type { Tag } from "@/features/mydrive/types";
@@ -16,9 +17,12 @@ interface DocEditorProps {
   initialData: {
     id: string; title: string; content: string; observation: string; tags: Tag[];
   };
+  prevHref?: string | null;
+  nextHref?: string | null;
 }
 
-export default function DocEditor({ allTags: initialAllTags, initialData }: DocEditorProps) {
+export default function DocEditor({ allTags: initialAllTags, initialData, prevHref, nextHref }: DocEditorProps) {
+  const router = useRouter();
   const [title, setTitle] = useState(initialData.title);
   const [observation, setObservation] = useState(initialData.observation);
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -63,6 +67,28 @@ export default function DocEditor({ allTags: initialAllTags, initialData }: DocE
   useEffect(() => {
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   }, []);
+
+  // Flèches Haut/Bas : naviguer vers le fichier précédent / suivant du dossier
+  useEffect(() => {
+    const isEditableTarget = (el: EventTarget | null): boolean => {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+      if (el.isContentEditable) return true;
+      return false;
+    };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (isEditableTarget(e.target)) return;
+      const target = e.key === "ArrowUp" ? prevHref : nextHref;
+      if (!target) return;
+      e.preventDefault();
+      router.push(target);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [prevHref, nextHref, router]);
 
   // Cmd+K : ouvrir la recherche de fichiers
   useEffect(() => {

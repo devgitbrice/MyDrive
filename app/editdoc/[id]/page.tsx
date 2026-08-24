@@ -6,6 +6,17 @@ import { notFound } from "next/navigation";
 // Toujours re-fetch le doc a chaque requete (evite le contenu perime dans l'iframe/preview)
 export const dynamic = "force-dynamic";
 
+function editUrlFor(id: string, docType: string | null): string {
+  switch (docType) {
+    case "python": return `/editpython/${id}`;
+    case "table": return `/edittable/${id}`;
+    case "mindmap": return `/editmindmap/${id}`;
+    case "presentation": return `/editpresentation/${id}`;
+    case "voyage": return `/editvoyage/${id}`;
+    default: return `/editdoc/${id}`;
+  }
+}
+
 export default async function EditDocPage({
   params,
 }: {
@@ -28,6 +39,33 @@ export default async function EditDocPage({
     item.tags?.some((st: any) => st.tag_id === t.id)
   );
 
+  // Prev / next sibling in the same folder, sorted by title (numeric-aware, asc)
+  let prevHref: string | null = null;
+  let nextHref: string | null = null;
+  {
+    const q = supabase
+      .from("MyDrive")
+      .select("id, title, doc_type")
+      .eq("type", "file");
+    const { data: siblings } = item.parent_id
+      ? await q.eq("parent_id", item.parent_id)
+      : await q.is("parent_id", null);
+    if (siblings && siblings.length > 0) {
+      const sorted = [...siblings].sort((a, b) =>
+        (a.title || "").localeCompare(b.title || "", "fr", { numeric: true, sensitivity: "base" })
+      );
+      const idx = sorted.findIndex((s) => s.id === item.id);
+      if (idx > 0) {
+        const p = sorted[idx - 1];
+        prevHref = editUrlFor(p.id, p.doc_type);
+      }
+      if (idx >= 0 && idx < sorted.length - 1) {
+        const n = sorted[idx + 1];
+        nextHref = editUrlFor(n.id, n.doc_type);
+      }
+    }
+  }
+
   return (
     <main className="min-h-dvh bg-neutral-950 text-white">
       <DocEditor
@@ -39,6 +77,8 @@ export default async function EditDocPage({
           observation: item.observation || "",
           tags: initialTags,
         }}
+        prevHref={prevHref}
+        nextHref={nextHref}
       />
     </main>
   );
