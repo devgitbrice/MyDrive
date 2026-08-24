@@ -38,25 +38,49 @@ export function codeFromId(id: string): string {
   return numberToCode(fnv1a(id));
 }
 
-type CodableItem = { id: string; created_at?: string };
+type CodableItem = { id: string; created_at?: string; code?: string | null };
 
 /**
- * Attribue un code unique à chaque élément.
+ * Valide et normalise un code saisi à la main.
+ * Renvoie le code en majuscules, ou null si la saisie est vide / invalide.
+ */
+export function normalizeCode(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(trimmed) ? trimmed : null;
+}
+
+/**
+ * Attribue un code à chaque élément.
  *
- * L'attribution se fait par ancienneté croissante : un élément déjà présent
- * conserve son code quand de nouveaux éléments sont ajoutés (seul le nouvel
- * arrivant se décale en cas de collision).
+ * 1. Les codes personnalisés (colonne `code` en base) sont réservés en premier :
+ *    ils sont prioritaires et ne bougent jamais.
+ * 2. Les éléments sans code personnalisé reçoivent leur code dérivé, attribué
+ *    par ancienneté croissante — un élément existant conserve donc son code
+ *    quand de nouveaux éléments sont ajoutés (seul le nouvel arrivant se
+ *    décale en cas de collision).
  */
 export function buildCodeMap(items: CodableItem[]): Record<string, string> {
+  const used = new Set<string>();
+  const map: Record<string, string> = {};
+
+  // 1. Codes personnalisés : prioritaires.
+  for (const item of items) {
+    if (!item?.id || map[item.id]) continue;
+    const custom = normalizeCode(item.code);
+    if (custom && !used.has(custom)) {
+      used.add(custom);
+      map[item.id] = custom;
+    }
+  }
+
+  // 2. Codes dérivés pour le reste, du plus ancien au plus récent.
   const ordered = [...items].sort((a, b) => {
     const ta = a.created_at ? Date.parse(a.created_at) : 0;
     const tb = b.created_at ? Date.parse(b.created_at) : 0;
     if (Number.isNaN(ta) || Number.isNaN(tb) || ta === tb) return a.id.localeCompare(b.id);
     return ta - tb;
   });
-
-  const used = new Set<string>();
-  const map: Record<string, string> = {};
 
   for (const item of ordered) {
     if (!item?.id || map[item.id]) continue;

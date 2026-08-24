@@ -13,7 +13,7 @@ export function ItemCodeProvider({
   items,
   children,
 }: {
-  items: { id: string; created_at?: string }[];
+  items: { id: string; created_at?: string; code?: string | null }[];
   children: React.ReactNode;
 }) {
   const codes = useMemo(() => buildCodeMap(items), [items]);

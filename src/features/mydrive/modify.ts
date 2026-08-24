@@ -33,6 +33,62 @@ export async function updateDriveItemAction(id: string, updates: Record<string, 
 }
 
 /**
+ * DÉFINIR / EFFACER LE CODE 3 LETTRES D'UN ITEM
+ *
+ * `code` vide => retour au code dérivé automatiquement de l'id.
+ * Renvoie un résultat plutôt qu'une exception pour que l'UI puisse afficher
+ * le motif du refus (format invalide, code déjà pris).
+ */
+export async function setItemCodeAction(
+  id: string,
+  code: string
+): Promise<{ ok: true; code: string | null } | { ok: false; error: string }> {
+  const raw = (code || "").trim();
+  const normalized = raw ? raw.toUpperCase() : null;
+
+  if (normalized !== null && !/^[A-Z]{3}$/.test(normalized)) {
+    return { ok: false, error: "Le code doit faire exactement 3 lettres (A-Z)." };
+  }
+
+  if (normalized) {
+    const { data: taken, error: checkError } = await supabase
+      .from("MyDrive")
+      .select("id, title")
+      .eq("code", normalized)
+      .neq("id", id)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error("Erreur vérification code:", checkError);
+      return { ok: false, error: "Impossible de vérifier la disponibilité du code." };
+    }
+    if (taken) {
+      return { ok: false, error: `Code déjà utilisé par « ${taken.title} ».` };
+    }
+  }
+
+  const { error } = await supabase
+    .from("MyDrive")
+    .update({ code: normalized })
+    .eq("id", id);
+
+  if (error) {
+    console.error("Erreur update code:", error);
+    // 42703 = colonne inexistante : migration SQL pas encore appliquee
+    if (error.code === "42703") {
+      return { ok: false, error: "Colonne `code` absente : applique d'abord la migration SQL." };
+    }
+    if (error.code === "23505") {
+      return { ok: false, error: "Code déjà utilisé par un autre élément." };
+    }
+    return { ok: false, error: "Erreur lors de l'enregistrement du code." };
+  }
+
+  revalidatePath("/mydrive");
+  return { ok: true, code: normalized };
+}
+
+/**
  * REMPLACER UNE IMAGE DANS LE STORAGE ET LA DB
  */
 export async function replaceImageAction(id: string, imagePath: string, imageData: string) {
