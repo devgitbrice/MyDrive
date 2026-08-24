@@ -127,6 +127,63 @@ export default function BlockManager({ initialHtml, tocOpen, onChange, chromeVis
   const focusedBlock = focusedBlockId ? { id: focusedBlockId, html: htmlRefs.current[focusedBlockId] || "" } : null;
   const focusedIdx = focusedBlockId ? blocks.findIndex(b => b.id === focusedBlockId) : -1;
 
+  // Copie au survol d'un titre (h1/h2/h3) dans le contenu du doc
+  const [copyBtn, setCopyBtn] = useState<{ top: number; left: number; text: string } | null>(null);
+  const [justCopied, setJustCopied] = useState(false);
+  const hideBtnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const isHeading = (el: EventTarget | null): HTMLElement | null => {
+      if (!(el instanceof HTMLElement)) return null;
+      const h = el.closest("h1, h2, h3");
+      if (!h) return null;
+      if (!(h as HTMLElement).closest(".block-editor-content")) return null;
+      return h as HTMLElement;
+    };
+
+    const onOver = (e: MouseEvent) => {
+      const h = isHeading(e.target);
+      if (!h) return;
+      if (hideBtnTimer.current) { clearTimeout(hideBtnTimer.current); hideBtnTimer.current = null; }
+      const rect = h.getBoundingClientRect();
+      const text = (h.textContent || "").trim();
+      if (!text) return;
+      setCopyBtn({ top: rect.top + 4, left: rect.right + 8, text });
+    };
+    const onOut = (e: MouseEvent) => {
+      const h = isHeading(e.target);
+      if (!h) return;
+      if (hideBtnTimer.current) clearTimeout(hideBtnTimer.current);
+      hideBtnTimer.current = setTimeout(() => setCopyBtn(null), 300);
+    };
+    document.addEventListener("mouseover", onOver);
+    document.addEventListener("mouseout", onOut);
+    return () => {
+      document.removeEventListener("mouseover", onOver);
+      document.removeEventListener("mouseout", onOut);
+      if (hideBtnTimer.current) clearTimeout(hideBtnTimer.current);
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    };
+  }, []);
+
+  const handleCopyClick = useCallback(async () => {
+    if (!copyBtn) return;
+    try {
+      await navigator.clipboard.writeText(copyBtn.text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = copyBtn.text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch {}
+      document.body.removeChild(ta);
+    }
+    setJustCopied(true);
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setJustCopied(false), 2000);
+  }, [copyBtn]);
+
   return (
     <div className={`flex-1 overflow-hidden flex w-full min-w-0 ${light ? "bg-white" : "bg-neutral-950"}`}>
       <TocSidebar entries={tocEntries} tocOpen={tocOpen} />
@@ -158,6 +215,18 @@ export default function BlockManager({ initialHtml, tocOpen, onChange, chromeVis
               <span className="text-sm font-medium">Ajouter un bloc</span>
             </button>
           </div>
+          {copyBtn && (
+            <button
+              type="button"
+              onMouseEnter={() => { if (hideBtnTimer.current) { clearTimeout(hideBtnTimer.current); hideBtnTimer.current = null; } }}
+              onMouseLeave={() => { if (hideBtnTimer.current) clearTimeout(hideBtnTimer.current); hideBtnTimer.current = setTimeout(() => setCopyBtn(null), 200); }}
+              onClick={handleCopyClick}
+              style={{ position: "fixed", top: copyBtn.top, left: copyBtn.left, zIndex: 60 }}
+              className={`px-2 py-1 rounded-md text-xs font-medium border shadow-sm transition-colors ${justCopied ? "bg-green-600 text-white border-green-500" : (light ? "bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100" : "bg-neutral-800 text-neutral-200 border-neutral-700 hover:bg-neutral-700")}`}
+            >
+              {justCopied ? "Copié" : "Copier"}
+            </button>
+          )}
           {focusedBlock && (
             <FocusModal
               block={focusedBlock}
