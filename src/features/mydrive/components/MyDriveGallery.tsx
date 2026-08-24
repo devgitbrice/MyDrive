@@ -9,6 +9,7 @@ import SwipeableOverlay from "@/features/mydrive/components/SwipeableOverlay";
 import { updateDriveItemAction, deleteDriveItemAction } from "@/features/mydrive/modify";
 import { parseSlides } from "@/presentation/types";
 import { downloadItemAsFile } from "@/features/mydrive/lib/downloadItem";
+import { supabase } from "@/lib/supabaseClient";
 
 const DOC_TYPE_CONFIG: Record<string, { icon: React.ReactNode; bg: string; text: string; border: string; label: string }> = {
   doc: { label: "Doc", bg: "bg-blue-500/20", text: "text-blue-400", border: "border-blue-500/40",
@@ -83,9 +84,15 @@ function PresentationCardWrapper({ item, imageHeightClass, children }: { item: M
 function dispatchMoveRequest(id: string) { window.dispatchEvent(new CustomEvent("mydrive-request-move", { detail: { id } })); }
 function dragProps(id: string) { return { draggable: true, onDragStart: (e: React.DragEvent<HTMLElement>) => { e.dataTransfer.setData("text/mydrive-item", id); e.dataTransfer.effectAllowed = "move"; } }; }
 
-// Renvoie true si le href correspond a un editeur (pas un dossier)
 function isEditorHref(href: string | null): boolean {
   return !!href && href.startsWith("/edit");
+}
+
+// Extrait l'id du doc à partir d'un href /edit*/{id}
+function extractDocIdFromHref(href: string | null): string | null {
+  if (!href) return null;
+  const m = href.match(/^\/edit[a-z]+\/([^/?#]+)/);
+  return m ? m[1] : null;
 }
 
 export default function MyDriveGallery({ items: initialItems, allTags: initialTags }: MyDriveListProps) {
@@ -99,14 +106,32 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<MyDriveItem | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  // Aperçu split desktop : href du doc affiche a droite
   const [previewHref, setPreviewHref] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string>("");
+  const [previewKey, setPreviewKey] = useState<number>(0);
 
   useEffect(() => { try { const saved = localStorage.getItem("mydrive-view-mode"); if (saved === "list" || saved === "grid") setViewMode(saved); } catch {} }, []);
   useEffect(() => { try { localStorage.setItem("mydrive-view-mode", viewMode); } catch {} }, [viewMode]);
   useEffect(() => { setItems(initialItems); }, [initialItems]);
   useEffect(() => { setAllTags(initialTags); }, [initialTags]);
+
+  // Reset iframe key quand on ouvre un nouveau preview
+  useEffect(() => { setPreviewKey(0); }, [previewHref]);
+
+  // Realtime: quand le doc affiche dans le preview est modifie -> force reload iframe
+  useEffect(() => {
+    const previewedId = extractDocIdFromHref(previewHref);
+    if (!previewedId) return;
+    const channel = supabase
+      .channel(`preview-${previewedId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "MyDrive", filter: `id=eq.${previewedId}` },
+        () => setPreviewKey((k) => k + 1)
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [previewHref]);
 
   const imageHeightClass = useMemo(() => { if (size <= 33) return "h-36 md:h-40"; if (size <= 66) return "h-48 md:h-56"; return "h-64 md:h-72"; }, [size]);
   const gridClass = useMemo(() => { if (size <= 33) return "grid-cols-2 md:grid-cols-3 lg:grid-cols-4"; if (size <= 66) return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"; return "grid-cols-1 md:grid-cols-2"; }, [size]);
@@ -146,7 +171,6 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
 
   const handleOpen = (item: MyDriveItem) => { const index = filteredItems.findIndex((i) => i.id === item.id); setSelectedIndex(index); };
 
-  // Intercepte le clic en mode liste sur desktop pour afficher en aperçu split
   const handleListRowClick = (e: React.MouseEvent, item: MyDriveItem, href: string | null) => {
     if (!isEditorHref(href)) return;
     if (typeof window === "undefined") return;
@@ -411,17 +435,22 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
         </section>
       </div>
 
-      {/* Panneau d'aperçu split desktop (lg+) : moitié droite avec iframe du doc */}
+      {/* Panneau d'aperçu split desktop (lg+) */}
       {previewHref && (
         <div className="hidden lg:flex fixed top-0 right-0 h-dvh w-[45vw] z-40 bg-neutral-950 border-l-2 border-blue-500 shadow-2xl flex-col">
           <div className="flex items-center justify-between px-3 py-2 bg-neutral-900 border-b border-neutral-800 shrink-0">
             <span className="text-sm font-medium text-white truncate flex-1">Aperçu : {previewTitle}</span>
             <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPreviewKey((k) => k + 1)}
+                className="text-neutral-300 hover:text-white text-sm w-8 h-8 flex items-center justify-center rounded hover:bg-neutral-800"
+                title="Recharger l'aperçu"
+              >↻</button>
               <a href={previewHref} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 text-neutral-300 hover:text-white hover:bg-neutral-800 rounded" title="Ouvrir en plein écran">↗</a>
               <button onClick={() => setPreviewHref(null)} className="text-neutral-400 hover:text-white text-xl w-8 h-8 flex items-center justify-center rounded hover:bg-neutral-800" title="Fermer (Échap)">✕</button>
             </div>
           </div>
-          <iframe src={previewHref} className="flex-1 w-full bg-neutral-950" />
+          <iframe key={previewKey} src={previewHref} className="flex-1 w-full bg-neutral-950" />
         </div>
       )}
 
