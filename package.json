@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:cours": "tsx scripts/seed-cours.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.91.1",
