@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Settings, Plus } from "lucide-react";
 import { fetchMyDrive, fetchAllTags } from "@/features/mydrive/lib/fetchMyDrive";
 import FolderView from "@/features/mydrive/components/FolderView";
+import { ItemCodeProvider } from "@/features/mydrive/components/ItemCodeProvider";
 import CreateVoyageButton from "@/features/voyage/components/CreateVoyageButton";
 import AddFileButton from "@/components/AddFileButton";
 import AddPendingDocButton from "@/components/AddPendingDocButton";
@@ -74,7 +75,9 @@ export default async function MyDrivePage() {
       </header>
 
       <Suspense fallback={null}>
-        <FolderView items={items} allTags={allTags} />
+        <ItemCodeProvider items={items}>
+          <FolderView items={items} allTags={allTags} />
+        </ItemCodeProvider>
       </Suspense>
     </main>
   );

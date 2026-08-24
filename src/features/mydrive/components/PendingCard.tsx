@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { uploadToMyDrive } from "@/lib/uploadToMyDrive";
 import { deleteDriveItemAction } from "@/features/mydrive/modify";
 import type { MyDriveItem } from "@/features/mydrive/types";
+import ItemCodeBadge from "./ItemCodeBadge";
 
 interface Props {
   item: MyDriveItem;
@@ -91,7 +92,10 @@ export default function PendingCard({ item, imageHeightClass }: Props) {
       </button>
 
       <div className="p-3 flex flex-col gap-1">
-        <h3 className="font-medium text-neutral-200 truncate text-sm">{item.title}</h3>
+        <div className="flex items-center gap-2">
+          <ItemCodeBadge id={item.id} variant="inline" className="shrink-0" />
+          <h3 className="font-medium text-neutral-200 truncate text-sm">{item.title}</h3>
+        </div>
         <span className="text-[10px] text-amber-400 uppercase tracking-wide font-bold">En attente</span>
       </div>
 
