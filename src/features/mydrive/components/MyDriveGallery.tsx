@@ -254,7 +254,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
   };
 
   const myLinks = [
-    { name: "Vercel", url: "https://vercel.com/bricems-projects/mydrive" },
+    { name: "Vercel", url: "https://vercel.com/bricems-projects/photo-app" },
     { name: "GitHub", url: "https://github.com/devgitbrice/mydrive" },
     { name: "Formation", url: "https://formations-seven.vercel.app" },
     { name: "Muxeo", url: "https://muxeo.vercel.app/" },
