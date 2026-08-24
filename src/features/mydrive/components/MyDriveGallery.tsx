@@ -112,6 +112,32 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
 
   useEffect(() => { try { const saved = localStorage.getItem("mydrive-view-mode"); if (saved === "list" || saved === "grid") setViewMode(saved); } catch {} }, []);
   useEffect(() => { try { localStorage.setItem("mydrive-view-mode", viewMode); } catch {} }, [viewMode]);
+
+  // Restaure le split preview au chargement (uniquement lg+)
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return;
+      if (!window.matchMedia("(min-width: 1024px)").matches) return;
+      const raw = localStorage.getItem("mydrive-preview");
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { href?: string; title?: string };
+      if (saved && typeof saved.href === "string" && saved.href) {
+        setPreviewHref(saved.href);
+        setPreviewTitle(saved.title || "");
+      }
+    } catch {}
+  }, []);
+
+  // Persiste le split preview courant
+  useEffect(() => {
+    try {
+      if (previewHref) {
+        localStorage.setItem("mydrive-preview", JSON.stringify({ href: previewHref, title: previewTitle }));
+      } else {
+        localStorage.removeItem("mydrive-preview");
+      }
+    } catch {}
+  }, [previewHref, previewTitle]);
   useEffect(() => { setItems(initialItems); }, [initialItems]);
   useEffect(() => { setAllTags(initialTags); }, [initialTags]);
 
