@@ -94,23 +94,35 @@ export default function AddPage() {
       setBatchIndex(0);
       setProgress(0);
 
+      // Garde-fou : prévient si on quitte la page en plein upload (#15)
+      const guard = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+      window.addEventListener("beforeunload", guard);
+
       try {
-        for (let i = 0; i < photos.length; i++) {
-          setBatchIndex(i);
-          setProgress(0);
-          const f = photos[i];
-          const autoTitle = (batchPrefix.trim() ? `${batchPrefix.trim()} ` : "") + stripExt(f.name);
-          const { imagePath, publicUrl } = await uploadToMyDrive(f, (pct) => setProgress(pct));
-          await createMyDriveRow({
-            title: autoTitle,
-            observation: "",
-            imagePath,
-            imageUrl: publicUrl,
-          });
+        // Upload parallèle par vagues de 3 (#15) — ~3x plus rapide qu'en séquentiel
+        const CONCURRENCY = 3;
+        let done = 0;
+        for (let i = 0; i < photos.length; i += CONCURRENCY) {
+          const wave = photos.slice(i, i + CONCURRENCY);
+          await Promise.all(wave.map(async (f) => {
+            const autoTitle = (batchPrefix.trim() ? `${batchPrefix.trim()} ` : "") + stripExt(f.name);
+            const { imagePath, publicUrl } = await uploadToMyDrive(f);
+            await createMyDriveRow({
+              title: autoTitle,
+              observation: "",
+              imagePath,
+              imageUrl: publicUrl,
+            });
+            done += 1;
+            setBatchIndex(done - 1);
+            setProgress(100);
+          }));
         }
         setStatus("success");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur inconnue.");
+      } finally {
+        window.removeEventListener("beforeunload", guard);
       }
     }
 

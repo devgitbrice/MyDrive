@@ -14,7 +14,24 @@ function htmlToPlainText(html: string): string {
   if (typeof document === "undefined") return "";
   const tmp = document.createElement("div");
   tmp.innerHTML = html;
-  const blocks = tmp.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li,tr,td,th,br,div");
+
+  // Tables : chaque ligne devient une phrase « cellule 1 : cellule 2. »
+  // pour une lecture naturelle au lieu d'un flux de nombres (#16)
+  tmp.querySelectorAll("table").forEach((table) => {
+    const sentences: string[] = [];
+    table.querySelectorAll("tr").forEach((tr) => {
+      const cells = Array.from(tr.querySelectorAll("td,th"))
+        .map((c) => (c.textContent || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean);
+      if (cells.length >= 2) sentences.push(`${cells[0]} : ${cells.slice(1).join(", ")}.`);
+      else if (cells.length === 1) sentences.push(`${cells[0]}.`);
+    });
+    const repl = document.createElement("p");
+    repl.textContent = " " + sentences.join(" ") + " ";
+    table.replaceWith(repl);
+  });
+
+  const blocks = tmp.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li,br,div");
   blocks.forEach((b) => { b.appendChild(document.createTextNode(" ")); });
   return (tmp.textContent || "").replace(/\s+/g, " ").trim();
 }

@@ -28,6 +28,10 @@ export default function DrawEditor({ initialData }: Props) {
   const [size, setSize] = useState<number>(4);
   const [eraser, setEraser] = useState(false);
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
+  // Rejet de paume iPad : n'accepte que le stylet quand actif (#17)
+  const [penOnly, setPenOnly] = useState(false);
+  useEffect(() => { try { setPenOnly(localStorage.getItem("draw-pen-only") === "1"); } catch {} }, []);
+  useEffect(() => { try { localStorage.setItem("draw-pen-only", penOnly ? "1" : "0"); } catch {} }, [penOnly]);
 
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -144,7 +148,8 @@ export default function DrawEditor({ initialData }: Props) {
   }
 
   function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
-    // Palm rejection : only pen and mouse; touch uses single-finger draw too
+    // Mode « Pencil seul » : le doigt (et la paume) sont ignorés (#17)
+    if (penOnly && e.pointerType === "touch") return;
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
     drawingRef.current = true;
     const p = getPos(e);
@@ -243,6 +248,13 @@ export default function DrawEditor({ initialData }: Props) {
           className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${eraser ? "bg-pink-500 border-pink-400 text-white" : "border-neutral-700 text-neutral-300 hover:bg-neutral-800"}`}
         >
           🧽 Gomme
+        </button>
+        <button
+          onClick={() => setPenOnly((v) => !v)}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${penOnly ? "bg-blue-600 border-blue-500 text-white" : "border-neutral-700 text-neutral-300 hover:bg-neutral-800"}`}
+          title="N'accepter que l'Apple Pencil (ignore le doigt et la paume)"
+        >
+          ✍️ Pencil seul
         </button>
         <button onClick={undo} className="px-3 py-1.5 rounded-lg text-sm border border-neutral-700 text-neutral-300 hover:bg-neutral-800">↶ Undo</button>
         <button onClick={redo} className="px-3 py-1.5 rounded-lg text-sm border border-neutral-700 text-neutral-300 hover:bg-neutral-800">↷ Redo</button>
