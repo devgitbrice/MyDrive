@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, Share2 } from "lucide-react";
 import DocExportMenu from "@/components/DocExportMenu";
 import TtsButton from "@/components/TtsButton";
 import { useThemeStore } from "@/store/themeStore";
@@ -7,6 +8,8 @@ import ItemCodeBadge from "@/features/mydrive/components/ItemCodeBadge";
 
 interface DocHeaderProps {
   id?: string;
+  /** Retour vers le dossier contenant le doc (#4). Repli : /mydrive. */
+  backHref?: string;
   title: string;
   observation: string;
   status: "idle" | "saving" | "saved";
@@ -17,6 +20,7 @@ interface DocHeaderProps {
 
 export default function DocHeader({
   id,
+  backHref,
   title,
   observation,
   status,
@@ -25,11 +29,25 @@ export default function DocHeader({
   getContent,
 }: DocHeaderProps) {
   const light = useThemeStore((s) => s.theme) === "light";
+  const [shareCopied, setShareCopied] = useState(false);
+
+  const copyShareLink = async () => {
+    if (!id) return;
+    const url = `${window.location.origin}/view/${id}`;
+    try { await navigator.clipboard.writeText(url); } catch {
+      const ta = document.createElement("textarea");
+      ta.value = url; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch {}
+      document.body.removeChild(ta);
+    }
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+  };
 
   return (
     <div className="flex flex-col shrink-0">
       <div className={`${light ? "bg-neutral-100 border-neutral-300" : "bg-neutral-900 border-neutral-800"} border-b p-3 flex items-center gap-3`}>
-        <Link href="/mydrive" className={`transition-colors p-2 rounded-lg shrink-0 ${light ? "text-neutral-500 hover:text-neutral-900 bg-neutral-200" : "text-neutral-400 hover:text-white bg-neutral-800"}`}>
+        <Link href={backHref || "/mydrive"} className={`transition-colors p-2 rounded-lg shrink-0 ${light ? "text-neutral-500 hover:text-neutral-900 bg-neutral-200" : "text-neutral-400 hover:text-white bg-neutral-800"}`}>
           <ArrowLeft className="w-5 h-5" />
         </Link>
 
@@ -42,6 +60,16 @@ export default function DocHeader({
         />
 
         {getContent && <TtsButton getContent={getContent} title={title} />}
+
+        {id && (
+          <button
+            onClick={copyShareLink}
+            title="Copier le lien de partage (lecture seule)"
+            className={`w-9 h-9 flex items-center justify-center rounded-full border transition-colors shrink-0 ${shareCopied ? "bg-green-600 border-green-500 text-white" : light ? "bg-neutral-200 border-neutral-300 text-neutral-600 hover:bg-neutral-300" : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"}`}
+          >
+            {shareCopied ? "✓" : <Share2 size={15} />}
+          </button>
+        )}
 
         {id && <ItemCodeBadge id={id} variant="inline" />}
 

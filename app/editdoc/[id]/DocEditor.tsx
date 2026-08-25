@@ -19,9 +19,10 @@ interface DocEditorProps {
   };
   prevHref?: string | null;
   nextHref?: string | null;
+  backHref?: string;
 }
 
-export default function DocEditor({ allTags: initialAllTags, initialData, prevHref, nextHref }: DocEditorProps) {
+export default function DocEditor({ allTags: initialAllTags, initialData, prevHref, nextHref, backHref }: DocEditorProps) {
   const router = useRouter();
   const [title, setTitle] = useState(initialData.title);
   const [observation, setObservation] = useState(initialData.observation);
@@ -32,6 +33,9 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
   const [mobileTagsOpen, setMobileTagsOpen] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
+  // Toast « mis à jour » quand une modification externe arrive (#3)
+  const [externalUpdate, setExternalUpdate] = useState(false);
+  const externalToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Contenu courant (mis à jour à chaque frappe ET à chaque event Realtime externe)
   const [contentSnapshot, setContentSnapshot] = useState(initialData.content);
   // Clé de re-mount du BlockManager pour appliquer un contenu externe
@@ -68,19 +72,12 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   }, []);
 
-  // Flèches Haut/Bas : naviguer vers le fichier précédent / suivant du dossier
+  // Alt+Haut / Alt+Bas : fichier précédent / suivant du dossier (#6 —
+  // les flèches nues restent au scroll et au curseur, plus de départ surprise)
   useEffect(() => {
-    const isEditableTarget = (el: EventTarget | null): boolean => {
-      if (!(el instanceof HTMLElement)) return false;
-      const tag = el.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-      if (el.isContentEditable) return true;
-      return false;
-    };
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-      if (isEditableTarget(e.target)) return;
+      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
       const target = e.key === "ArrowUp" ? prevHref : nextHref;
       if (!target) return;
       e.preventDefault();
@@ -165,6 +162,10 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
             contentRef.current = nextContent;
             setContentSnapshot(nextContent);
             setContentKey((k) => k + 1);
+            // Signale visuellement la mise à jour externe (#3)
+            setExternalUpdate(true);
+            if (externalToastTimer.current) clearTimeout(externalToastTimer.current);
+            externalToastTimer.current = setTimeout(() => setExternalUpdate(false), 3000);
           }
         }
       )
@@ -199,8 +200,13 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
   return (
     <div className={`flex flex-col h-dvh w-full overflow-hidden ${light ? "bg-white text-neutral-900" : "bg-neutral-950 text-white"} ${chromeVisible ? "" : "cursor-none"}`}>
       <FileSearchModal open={fileSearchOpen} onClose={() => setFileSearchOpen(false)} onInsert={handleInsertDocLink} />
+      {externalUpdate && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2 rounded-full bg-green-600 text-white text-sm font-medium shadow-lg animate-pulse">
+          ⟳ Document mis à jour
+        </div>
+      )}
       <div className={chromeClass}>
-        <DocHeader id={initialData.id} title={title} observation={observation} status={status} onTitleChange={handleTitleChange} onObservationChange={handleObservationChange} getContent={() => contentRef.current} />
+        <DocHeader id={initialData.id} backHref={backHref} title={title} observation={observation} status={status} onTitleChange={handleTitleChange} onObservationChange={handleObservationChange} getContent={() => contentRef.current} />
         <DocRibbon tocOpen={tocOpen} setTocOpen={setTocOpen} />
       </div>
 

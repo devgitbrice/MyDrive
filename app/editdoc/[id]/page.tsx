@@ -80,6 +80,7 @@ export default async function EditDocPage({
         }}
         prevHref={prevHref}
         nextHref={nextHref}
+        backHref={item.parent_id ? `/mydrive?folder=${item.parent_id}` : "/mydrive?folder=__unfiled__"}
       />
     </main>
   );
