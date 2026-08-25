@@ -1,122 +1,167 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Play, Pause, Square } from "lucide-react";
+import { Play, Pause, Square, Loader2 } from "lucide-react";
 
 interface Props {
   getContent: () => string;
   title?: string;
 }
 
+const MAX_CHUNK_CHARS = 3500;
+
 function htmlToPlainText(html: string): string {
   if (typeof document === "undefined") return "";
   const tmp = document.createElement("div");
   tmp.innerHTML = html;
-  // Insert spaces around block elements for cleaner separation
   const blocks = tmp.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li,tr,td,th,br,div");
   blocks.forEach((b) => { b.appendChild(document.createTextNode(" ")); });
   return (tmp.textContent || "").replace(/\s+/g, " ").trim();
 }
 
+/** Split text into chunks <= MAX_CHUNK_CHARS at sentence boundaries. */
+function chunkText(text: string): string[] {
+  if (text.length <= MAX_CHUNK_CHARS) return [text];
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  const chunks: string[] = [];
+  let current = "";
+  for (const s of sentences) {
+    if ((current + " " + s).length > MAX_CHUNK_CHARS) {
+      if (current) chunks.push(current.trim());
+      if (s.length > MAX_CHUNK_CHARS) {
+        // Very long sentence — hard split
+        for (let i = 0; i < s.length; i += MAX_CHUNK_CHARS) {
+          chunks.push(s.slice(i, i + MAX_CHUNK_CHARS));
+        }
+        current = "";
+      } else {
+        current = s;
+      }
+    } else {
+      current = current ? current + " " + s : s;
+    }
+  }
+  if (current) chunks.push(current.trim());
+  return chunks;
+}
+
+async function fetchAudioBlob(text: string): Promise<Blob> {
+  const r = await fetch("/api/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, voice: "alloy", model: "gpt-4o-mini-tts", speed: 1 }),
+  });
+  if (!r.ok) {
+    const err = await r.text();
+    throw new Error(`TTS ${r.status}: ${err}`);
+  }
+  return await r.blob();
+}
+
 export default function TtsButton({ getContent, title }: Props) {
-  const [state, setState] = useState<"idle" | "playing" | "paused">("idle");
+  const [state, setState] = useState<"idle" | "loading" | "playing" | "paused">("idle");
   const [progress, setProgress] = useState(0); // 0..1
-  const textRef = useRef<string>("");
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const startedAtCharRef = useRef<number>(0);
-  const resumeFromCharRef = useRef<number>(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const chunksRef = useRef<string[]>([]);
+  const chunkIdxRef = useRef(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlsRef = useRef<string[]>([]);
+  const cancelledRef = useRef(false);
+
+  const cleanup = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.onended = null;
+      audioRef.current.ontimeupdate = null;
+      audioRef.current.onerror = null;
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    for (const u of objectUrlsRef.current) URL.revokeObjectURL(u);
+    objectUrlsRef.current = [];
+  }, []);
 
   const stopAll = useCallback(() => {
-    if (typeof window === "undefined") return;
-    window.speechSynthesis.cancel();
-    utteranceRef.current = null;
+    cancelledRef.current = true;
+    cleanup();
     setState("idle");
     setProgress(0);
-    startedAtCharRef.current = 0;
-    resumeFromCharRef.current = 0;
-  }, []);
+    chunksRef.current = [];
+    chunkIdxRef.current = 0;
+    setErrorMsg(null);
+  }, [cleanup]);
 
-  const speakFrom = useCallback((fromChar: number) => {
-    if (typeof window === "undefined") return;
-    const text = textRef.current;
-    if (!text) return;
-    const slice = text.slice(fromChar);
-    if (!slice) return;
-    const u = new SpeechSynthesisUtterance(slice);
-    u.lang = "fr-FR";
-    // Try to pick a French voice (best quality if available)
-    const voices = window.speechSynthesis.getVoices();
-    const fr = voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("fr"))
-             || voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("fr-fr"))
-             || null;
-    if (fr) u.voice = fr;
-    u.rate = 1;
-    u.pitch = 1;
-
-    startedAtCharRef.current = fromChar;
-
-    u.onboundary = (e) => {
-      const abs = startedAtCharRef.current + (e.charIndex || 0);
-      setProgress(Math.min(1, abs / text.length));
-    };
-    u.onend = () => {
+  const playChunkAt = useCallback(async (idx: number) => {
+    if (cancelledRef.current) return;
+    const chunks = chunksRef.current;
+    if (idx >= chunks.length) {
       setProgress(1);
       setState("idle");
-      utteranceRef.current = null;
-      startedAtCharRef.current = 0;
-      resumeFromCharRef.current = 0;
-    };
-    u.onerror = () => {
+      cleanup();
+      chunkIdxRef.current = 0;
+      return;
+    }
+    chunkIdxRef.current = idx;
+    try {
+      const blob = await fetchAudioBlob(chunks[idx]);
+      if (cancelledRef.current) return;
+      const url = URL.createObjectURL(blob);
+      objectUrlsRef.current.push(url);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.ontimeupdate = () => {
+        if (!audio.duration || isNaN(audio.duration)) return;
+        const local = audio.currentTime / audio.duration;
+        setProgress(Math.min(1, (idx + local) / chunks.length));
+      };
+      audio.onended = () => {
+        if (cancelledRef.current) return;
+        playChunkAt(idx + 1);
+      };
+      audio.onerror = () => {
+        setErrorMsg("Erreur lecture audio");
+        setState("idle");
+        cleanup();
+      };
+      await audio.play();
+      setState("playing");
+    } catch (e: any) {
+      setErrorMsg(e?.message || "Erreur TTS");
       setState("idle");
-      utteranceRef.current = null;
-    };
+      cleanup();
+    }
+  }, [cleanup]);
 
-    utteranceRef.current = u;
-    window.speechSynthesis.speak(u);
-    setState("playing");
-  }, []);
-
-  const play = useCallback(() => {
+  const play = useCallback(async () => {
     if (typeof window === "undefined") return;
-    // Text is refreshed each play
-    textRef.current = htmlToPlainText((title ? title + ". " : "") + getContent());
-    if (!textRef.current) return;
-    window.speechSynthesis.cancel();
-    speakFrom(0);
-  }, [getContent, speakFrom, title]);
+    setErrorMsg(null);
+    const raw = (title ? title + ". " : "") + getContent();
+    const text = htmlToPlainText(raw);
+    if (!text) return;
+    stopAll();
+    cancelledRef.current = false;
+    chunksRef.current = chunkText(text);
+    chunkIdxRef.current = 0;
+    setState("loading");
+    setProgress(0);
+    await playChunkAt(0);
+  }, [getContent, title, playChunkAt, stopAll]);
 
   const togglePauseResume = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const synth = window.speechSynthesis;
+    if (!audioRef.current) return;
     if (state === "playing") {
-      // On iOS pause() can be flaky - fallback: cancel and remember position
-      try { synth.pause(); } catch {}
-      if (synth.paused) {
-        setState("paused");
-        return;
-      }
-      // Fallback: cancel + remember approx position from progress
-      const approxChar = Math.floor(progress * textRef.current.length);
-      resumeFromCharRef.current = approxChar;
-      synth.cancel();
+      audioRef.current.pause();
       setState("paused");
     } else if (state === "paused") {
-      try { synth.resume(); } catch {}
-      // If resume didn't take effect (iOS), speak from remembered position
-      setTimeout(() => {
-        if (!synth.speaking) {
-          speakFrom(resumeFromCharRef.current);
-        } else {
-          setState("playing");
-        }
-      }, 50);
+      audioRef.current.play().catch(() => {});
+      setState("playing");
     }
-  }, [state, progress, speakFrom]);
+  }, [state]);
 
   // Space bar toggle (only when TTS active AND focus is not on editable target)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (state === "idle") return;
+      if (state === "idle" || state === "loading") return;
       if (e.key !== " " && e.code !== "Space") return;
       const t = e.target as HTMLElement | null;
       if (t) {
@@ -131,31 +176,30 @@ export default function TtsButton({ getContent, title }: Props) {
     return () => window.removeEventListener("keydown", handler);
   }, [state, togglePauseResume]);
 
-  // Cleanup on unmount
-  useEffect(() => () => { try { window.speechSynthesis.cancel(); } catch {} }, []);
-
-  // Ensure voices are loaded (Chrome loads them async)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const s = window.speechSynthesis;
-    if (s.getVoices().length === 0 && "onvoiceschanged" in s) {
-      const h = () => { /* trigger reload */ };
-      s.addEventListener("voiceschanged", h);
-      return () => s.removeEventListener("voiceschanged", h);
-    }
-  }, []);
+  useEffect(() => () => { cleanup(); }, [cleanup]);
 
   const percent = Math.round(progress * 100);
+  const chunkInfo = chunksRef.current.length > 1
+    ? ` · ${chunkIdxRef.current + 1}/${chunksRef.current.length}`
+    : "";
 
   return (
     <div className="flex items-center gap-2 shrink-0">
       {state === "idle" ? (
         <button
           onClick={play}
-          title="Lire à voix haute (TTS)"
+          title="Lire à voix haute (ChatGPT TTS)"
           className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-800 hover:bg-blue-600 text-neutral-200 hover:text-white border border-neutral-700 transition-colors"
         >
           <Play size={16} />
+        </button>
+      ) : state === "loading" ? (
+        <button
+          disabled
+          title="Chargement de la voix ChatGPT..."
+          className="w-9 h-9 flex items-center justify-center rounded-full bg-blue-600/40 text-white"
+        >
+          <Loader2 size={16} className="animate-spin" />
         </button>
       ) : (
         <>
@@ -180,9 +224,16 @@ export default function TtsButton({ getContent, title }: Props) {
                 style={{ width: `${percent}%` }}
               />
             </div>
-            <span className="text-xs tabular-nums text-neutral-400 w-8 text-right">{percent}%</span>
+            <span className="text-xs tabular-nums text-neutral-400 w-14 text-right">
+              {percent}%{chunkInfo}
+            </span>
           </div>
         </>
+      )}
+      {errorMsg && (
+        <span className="text-xs text-red-400 truncate max-w-[220px]" title={errorMsg}>
+          {errorMsg}
+        </span>
       )}
     </div>
   );
