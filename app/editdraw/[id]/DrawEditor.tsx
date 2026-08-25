@@ -18,7 +18,7 @@ export default function DrawEditor({ initialData }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const drawingRef = useRef(false);
-  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const lastPointRef = useRef<{ x: number; y: number; pressure: number } | null>(null);
   const historyRef = useRef<ImageData[]>([]);
   const historyIndexRef = useRef<number>(-1);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
