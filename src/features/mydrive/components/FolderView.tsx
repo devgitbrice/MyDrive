@@ -104,19 +104,9 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "visible") scheduleRefresh();
-    };
-    const onFocus = () => scheduleRefresh();
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onFocus);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onFocus);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // NB : plus de refetch complet au focus/visibilitychange — le Realtime
+  // ci-dessus couvre déjà les mises à jour live, et recharger toute la table
+  // à chaque retour sur l'app rendait la navigation lente sur mobile.
 
   useEffect(() => {
     const v = (folderId && folderId !== UNFILED) ? folderId : "";

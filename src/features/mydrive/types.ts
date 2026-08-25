@@ -17,6 +17,8 @@ export interface MyDriveItem {
   image_url: string;    // Vérifiez bien que c'est image_url
   image_path?: string;
   created_at: string;
+  updated_at?: string;
+  deleted_at?: string | null;
   observation?: string;
   content?: string;
   type: string;

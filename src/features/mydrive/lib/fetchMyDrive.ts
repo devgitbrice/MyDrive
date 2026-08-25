@@ -112,16 +112,20 @@ export async function fetchMyDrive(): Promise<MyDriveItem[]> {
 
   const rows = resolveMirrors((data ?? []) as unknown as Row[]);
 
-  // 2) Contenu ciblé uniquement pour les présentations (utile pour les mini-slides)
-  const { data: presContents } = await supabase
-    .from("MyDrive")
-    .select("id, content")
-    .eq("doc_type", "presentation");
-
+  // 2) Contenu ciblé uniquement pour les présentations (utile pour les mini-slides).
+  //    Ne fetch le content QUE s'il y a effectivement des présentations, sinon on
+  //    évite une requête réseau inutile à chaque chargement.
+  const hasPresentation = rows.some((r: any) => r.doc_type === "presentation");
   const presContentMap = new Map<string, string>();
-  (presContents ?? []).forEach((row: any) => {
-    if (row?.id) presContentMap.set(row.id, row.content || "");
-  });
+  if (hasPresentation) {
+    const { data: presContents } = await supabase
+      .from("MyDrive")
+      .select("id, content")
+      .eq("doc_type", "presentation");
+    (presContents ?? []).forEach((row: any) => {
+      if (row?.id) presContentMap.set(row.id, row.content || "");
+    });
+  }
 
   return rows.map((row: any) => {
     const flattenedTags = (row.mydrive_tags || [])
@@ -136,6 +140,8 @@ export async function fetchMyDrive(): Promise<MyDriveItem[]> {
       image_url: row.image_url || "",
       content: presContentMap.get(row.id) || "",
       created_at: row.created_at,
+      updated_at: row.updated_at ?? row.created_at,
+      deleted_at: row.deleted_at ?? null,
       type: row.type || "file",
       doc_type: row.doc_type || "scan",
       parent_id: row.parent_id ?? null,
