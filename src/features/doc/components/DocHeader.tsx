@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import DocExportMenu from "@/components/DocExportMenu";
+import TtsButton from "@/components/TtsButton";
 import { useThemeStore } from "@/store/themeStore";
 import ItemCodeBadge from "@/features/mydrive/components/ItemCodeBadge";
 
@@ -39,6 +40,8 @@ export default function DocHeader({
           placeholder="Titre du document..."
           className={`flex-1 bg-transparent text-xl font-bold outline-none ${light ? "text-neutral-900 placeholder-neutral-400" : "text-white placeholder-neutral-600"}`}
         />
+
+        {getContent && <TtsButton getContent={getContent} title={title} />}
 
         {id && <ItemCodeBadge id={id} variant="inline" />}
 
