@@ -207,18 +207,27 @@ export async function updateDriveContentAction(id: string, content: string) {
  * SUPPRIMER UN ITEM (Fichier + Ligne DB)
  */
 export async function deleteDriveItemAction(id: string, imagePath: string) {
-  if (imagePath) {
-    await supabase.storage.from("MyDrive").remove([imagePath]);
-  }
-
-  const { error: dbError } = await supabase
+  // Corbeille : soft delete si la colonne deleted_at existe (migration SQL).
+  // Le fichier storage est conservé jusqu'à la suppression définitive.
+  const { error: softError } = await supabase
     .from("MyDrive")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("id", id);
 
-  if (dbError) {
-    console.error("Erreur suppression DB:", dbError);
-    throw new Error("Erreur lors de la suppression de l'entrée");
+  if (softError) {
+    // Colonne absente : repli sur l'ancienne suppression définitive.
+    if (imagePath) {
+      await supabase.storage.from("MyDrive").remove([imagePath]);
+    }
+    const { error: dbError } = await supabase
+      .from("MyDrive")
+      .delete()
+      .eq("id", id);
+
+    if (dbError) {
+      console.error("Erreur suppression DB:", dbError);
+      throw new Error("Erreur lors de la suppression de l'entrée");
+    }
   }
 
   revalidatePath("/mydrive");

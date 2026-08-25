@@ -29,7 +29,7 @@ export default async function MyDrivePage() {
     : null;
 
   return (
-    <main className="min-h-dvh p-6 space-y-6">
+    <main className="min-h-dvh p-6 pb-32 space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold text-red-500">MyDrive</h1>

@@ -14,7 +14,7 @@ const BASE_FIELDS = `
 `;
 
 /** Champs optionnels : absents tant que leur migration SQL n'a pas été lancée. */
-const OPTIONAL_FIELDS = ["code", "target_id"];
+const OPTIONAL_FIELDS = ["code", "target_id", "updated_at", "deleted_at"];
 
 const TAGS_FIELDS = `
       mydrive_tags (
