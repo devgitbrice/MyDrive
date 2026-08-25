@@ -76,8 +76,12 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
   const [globalQuery, setGlobalQuery] = useState("");
   const itemCodes = useItemCodes();
   const [dragOverId, setDragOverId] = useState<string | null | "__ROOT__">(null);
-  // Selecteur de dossier, partage entre « Deplacer vers » et « Creer un miroir dans ».
-  const [picker, setPicker] = useState<{ mode: "move" | "mirror"; item: MyDriveItem } | null>(null);
+  // Selecteur de dossier, partage entre « Deplacer vers », « Creer un miroir dans » et le lot (#5).
+  const [picker, setPicker] = useState<
+    | { mode: "move" | "mirror"; item: MyDriveItem }
+    | { mode: "move-batch"; ids: string[] }
+    | null
+  >(null);
 
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleRefresh = () => {
@@ -132,11 +136,18 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
       const it = items.find((i) => i.id === id);
       if (it) setPicker({ mode: "mirror", item: it });
     };
+    // Deplacement en lot (#5) : liste d'ids d'emplacement.
+    const onMoveBatch = (e: Event) => {
+      const { ids } = (e as CustomEvent).detail as { ids: string[] };
+      if (ids?.length) setPicker({ mode: "move-batch", ids });
+    };
     window.addEventListener("mydrive-request-move", onMove);
     window.addEventListener("mydrive-request-mirror", onMirror);
+    window.addEventListener("mydrive-request-move-batch", onMoveBatch);
     return () => {
       window.removeEventListener("mydrive-request-move", onMove);
       window.removeEventListener("mydrive-request-mirror", onMirror);
+      window.removeEventListener("mydrive-request-move-batch", onMoveBatch);
     };
   }, [items]);
 
@@ -293,15 +304,18 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
 
   async function handlePick(destParent: string | null) {
     if (!picker) return;
-    const { mode, item } = picker;
     try {
-      if (mode === "mirror") {
-        const blocage = mirrorBlocker(item, destParent, items);
+      if (picker.mode === "move-batch") {
+        for (const pid of picker.ids) {
+          await moveItem(pid, destParent);
+        }
+      } else if (picker.mode === "mirror") {
+        const blocage = mirrorBlocker(picker.item, destParent, items);
         if (blocage) { alert(blocage); return; }
-        await createMirror(item, destParent);
+        await createMirror(picker.item, destParent);
       } else {
         // Deplacer un miroir deplace le miroir, pas l'original.
-        await moveItem(item.alias_id ?? item.id, destParent);
+        await moveItem(picker.item.alias_id ?? picker.item.id, destParent);
       }
       setPicker(null);
       router.refresh();
@@ -631,7 +645,9 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setPicker(null)}>
           <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-5 max-w-md w-full mx-4 shadow-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-white mb-1">
-              {picker.mode === "mirror" ? "Créer un miroir de" : "Déplacer"} « {picker.item.title} »
+              {picker.mode === "move-batch"
+                ? `Déplacer ${picker.ids.length} élément${picker.ids.length > 1 ? "s" : ""}`
+                : `${picker.mode === "mirror" ? "Créer un miroir de" : "Déplacer"} « ${picker.item.title} »`}
             </h3>
             <p className="text-xs text-neutral-500 mb-4">
               {picker.mode === "mirror"
@@ -649,7 +665,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
                 <button
                   key={f.id}
                   onClick={() => handlePick(f.id)}
-                  disabled={f.id === picker.item.id}
+                  disabled={picker.mode !== "move-batch" && f.id === picker.item.id}
                   className="w-full text-left px-3 py-2 rounded-lg text-sm text-neutral-200 hover:bg-neutral-800 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <FolderIcon size={14} className="text-yellow-400" /> {f.title}

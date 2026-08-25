@@ -116,6 +116,14 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
   const [previewHref, setPreviewHref] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string>("");
   const [previewKey, setPreviewKey] = useState<number>(0);
+  // Tri (#21), pagination (#20), sélection multiple (#5)
+  const [sortMode, setSortMode] = useState<"title" | "recent" | "created">("title");
+  const [displayCount, setDisplayCount] = useState(60);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => { try { const s = localStorage.getItem("mydrive-sort"); if (s === "title" || s === "recent" || s === "created") setSortMode(s); } catch {} }, []);
+  useEffect(() => { try { localStorage.setItem("mydrive-sort", sortMode); } catch {} }, [sortMode]);
 
   useEffect(() => { try { const saved = localStorage.getItem("mydrive-view-mode"); if (saved === "list" || saved === "grid") setViewMode(saved); } catch {} }, []);
   useEffect(() => { try { localStorage.setItem("mydrive-view-mode", viewMode); } catch {} }, [viewMode]);
@@ -184,8 +192,30 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     if (selectedDocType) { result = result.filter((item) => { const itemData = item as any; if (selectedDocType === "photo") { return !itemData.doc_type && itemData.image_url; } return itemData.doc_type === selectedDocType; }); }
     if (selectedTagId === NO_TAGS) { result = result.filter((item) => !item.tags || item.tags.length === 0); } else if (selectedTagId) { result = result.filter((item) => item.tags?.some((t) => t.id === selectedTagId)); }
     if (searchQuery.trim()) { const query = searchQuery.toLowerCase(); result = result.filter((item) => item.title.toLowerCase().includes(query) || (item.observation && item.observation.toLowerCase().includes(query)) || codeOf(item.id).toLowerCase().includes(query)); }
+    // Tri (#21) — "title" conserve l'ordre reçu (déjà trié par titre)
+    if (sortMode !== "title") {
+      result = result.slice().sort((a: any, b: any) => {
+        const ta = sortMode === "recent" ? (a.updated_at || a.created_at || "") : (a.created_at || "");
+        const tb = sortMode === "recent" ? (b.updated_at || b.created_at || "") : (b.created_at || "");
+        return tb.localeCompare(ta);
+      });
+    }
     return result;
-  }, [items, searchQuery, selectedTagId, selectedDocType, codeOf]);
+  }, [items, searchQuery, selectedTagId, selectedDocType, codeOf, sortMode]);
+
+  // Pagination client (#20) : n'affiche que les N premiers, bouton pour étendre
+  useEffect(() => { setDisplayCount(60); }, [searchQuery, selectedTagId, selectedDocType, items]);
+  const visibleItems = useMemo(() => filteredItems.slice(0, displayCount), [filteredItems, displayCount]);
+
+  // Sélection multiple (#5)
+  const toggleSelect = useCallback((pid: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid); else next.add(pid);
+      return next;
+    });
+  }, []);
+  const exitSelectMode = useCallback(() => { setSelectMode(false); setSelectedIds(new Set()); }, []);
 
   const tagCounts = useMemo(() => { const counts: Record<string, number> = {}; items.forEach((item) => { if (Array.isArray(item.tags)) { item.tags.forEach((tag: any) => { const tagId = tag.id || tag.tag_id; if (tagId) counts[tagId] = (counts[tagId] || 0) + 1; }); } }); return counts; }, [items]);
   const noTagsCount = useMemo(() => items.filter((item) => !item.tags || item.tags.length === 0).length, [items]);
@@ -414,6 +444,25 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
                   <span className="text-xs text-neutral-500">Taille</span>
                   <input type="range" min={0} max={100} value={size} onChange={(e) => setSize(Number(e.target.value))} className="w-24 cursor-pointer" disabled={viewMode === "list"} />
                 </div>
+                {/* Tri (#21) */}
+                <select
+                  value={sortMode}
+                  onChange={(e) => setSortMode(e.target.value as any)}
+                  className="bg-neutral-800 text-neutral-300 border border-neutral-700 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-blue-500 cursor-pointer"
+                  title="Ordre de tri"
+                >
+                  <option value="title">Titre A→Z</option>
+                  <option value="recent">Modifiés récemment</option>
+                  <option value="created">Créés récemment</option>
+                </select>
+                {/* Sélection multiple (#5) */}
+                <button
+                  onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs border transition-colors ${selectMode ? "bg-blue-600 border-blue-500 text-white" : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-white"}`}
+                  title="Sélectionner plusieurs éléments"
+                >
+                  {selectMode ? "✕ Annuler" : "☑ Sélectionner"}
+                </button>
                 <div className="inline-flex rounded-lg border border-neutral-700 overflow-hidden">
                   <button onClick={() => setViewMode("grid")} title="Vue grille" aria-pressed={viewMode === "grid"} className={`px-2.5 py-1.5 text-xs transition-colors ${viewMode === "grid" ? "bg-blue-600 text-white" : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"}`}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -428,16 +477,20 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
 
           {viewMode === "list" ? (
             <div className="flex flex-col divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden flex-1 bg-neutral-900">
-              {filteredItems.length > 0 ? (
-                filteredItems.map((item) => {
+              {visibleItems.length > 0 ? (
+                visibleItems.map((item) => {
                   const itemData = item as any;
                   const type = itemData.doc_type || (itemData.image_url ? "photo" : "doc");
                   const cfg = DOC_TYPE_CONFIG[type] || DOC_TYPE_CONFIG.doc;
                   const href = getLinkHref(item);
                   const isActive = previewHref && href && previewHref === href;
-                  const rowClass = `group flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-800/60 transition-colors cursor-pointer ${isActive ? "bg-blue-600/20 border-l-2 border-blue-500" : ""}`;
+                  const isSelected = selectedIds.has(placementId(item));
+                  const rowClass = `group flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-800/60 transition-colors cursor-pointer ${isActive ? "bg-blue-600/20 border-l-2 border-blue-500" : ""} ${isSelected ? "bg-blue-600/25" : ""}`;
                   const inner = (
                     <>
+                      {selectMode && (
+                        <span className={`shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center text-[11px] ${isSelected ? "bg-blue-600 border-blue-500 text-white" : "border-neutral-600"}`}>{isSelected ? "✓" : ""}</span>
+                      )}
                       <span className={`shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg ${cfg.bg} ${cfg.text}`}>{cfg.icon}</span>
                       <ItemCodeBadge id={item.id} variant="inline" className="shrink-0" />
                       <span className="flex-1 min-w-0">
@@ -454,13 +507,21 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7l4 4-4 4M21 12H8" /></svg>
                       </button>
                       <span className={`hidden sm:inline text-[11px] px-2 py-0.5 rounded-full border ${cfg.border} ${cfg.text}`}>{cfg.label}</span>
-                      <span className="hidden md:inline text-xs text-neutral-400 w-28 text-right">{item.created_at ? format(new Date(item.created_at), "d MMM yyyy", { locale: fr }) : ""}</span>
+                      {/* Date toujours visible, compacte sur mobile (#10) */}
+                      <span suppressHydrationWarning className="text-[11px] md:text-xs text-neutral-500 md:text-neutral-400 md:w-28 text-right shrink-0 tabular-nums">
+                        {item.created_at ? format(new Date(item.created_at), "d MMM", { locale: fr }) : ""}
+                      </span>
                     </>
                   );
+                  const onRowClick = (e: React.MouseEvent) => {
+                    if (selectMode) { e.preventDefault(); toggleSelect(placementId(item)); return; }
+                    if (href) handleListRowClick(e, item, href);
+                    else handleOpen(item);
+                  };
                   return href ? (
-                    <Link key={item.id} href={href} className={rowClass} {...dragProps(placementId(item))} onClick={(e) => handleListRowClick(e, item, href)}>{inner}</Link>
+                    <Link key={item.id} href={href} className={rowClass} {...dragProps(placementId(item))} onClick={onRowClick}>{inner}</Link>
                   ) : (
-                    <div key={item.id} onClick={() => handleOpen(item)} className={rowClass} {...dragProps(placementId(item))}>{inner}</div>
+                    <div key={item.id} onClick={onRowClick} className={rowClass} {...dragProps(placementId(item))}>{inner}</div>
                   );
                 })
               ) : (
@@ -469,12 +530,20 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
             </div>
           ) : (
           <div className={`grid gap-4 ${gridClass} flex-1 content-start`}>
-            {filteredItems.length > 0 ? (
-              filteredItems.map((item) => {
-                const wrapperClass = "group relative flex flex-col bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-blue-500 transition-all hover:shadow-lg hover:shadow-blue-900/20 cursor-pointer";
+            {visibleItems.length > 0 ? (
+              visibleItems.map((item) => {
+                const isSelected = selectedIds.has(placementId(item));
+                const wrapperClass = `group relative flex flex-col bg-neutral-900 border rounded-xl overflow-hidden transition-all cursor-pointer ${isSelected ? "border-blue-500 ring-2 ring-blue-500/60" : "border-neutral-800 hover:border-blue-500 hover:shadow-lg hover:shadow-blue-900/20"}`;
                 const href = getLinkHref(item);
-                if (href) { return (<Link key={item.id} href={href} className={wrapperClass} {...dragProps(placementId(item))}>{renderCardContent(item)}</Link>); }
-                return (<div key={item.id} onClick={() => handleOpen(item)} className={wrapperClass} {...dragProps(placementId(item))}>{renderCardContent(item)}</div>);
+                const onCardClick = (e: React.MouseEvent) => {
+                  if (selectMode) { e.preventDefault(); toggleSelect(placementId(item)); return; }
+                  if (!href) handleOpen(item);
+                };
+                const selectBadge = selectMode ? (
+                  <span className={`absolute top-2 left-1/2 -translate-x-1/2 z-30 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs shadow ${isSelected ? "bg-blue-600 border-blue-400 text-white" : "bg-neutral-900/80 border-neutral-500 text-transparent"}`}>✓</span>
+                ) : null;
+                if (href) { return (<Link key={item.id} href={href} className={wrapperClass} {...dragProps(placementId(item))} onClick={onCardClick}>{selectBadge}{renderCardContent(item)}</Link>); }
+                return (<div key={item.id} onClick={onCardClick} className={wrapperClass} {...dragProps(placementId(item))}>{selectBadge}{renderCardContent(item)}</div>);
               })
             ) : (
               <div className="col-span-full flex flex-col items-center justify-center py-16 text-neutral-500">
@@ -483,6 +552,43 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
               </div>
             )}
           </div>
+          )}
+
+          {/* Pagination client (#20) */}
+          {filteredItems.length > displayCount && (
+            <div className="flex justify-center">
+              <button
+                onClick={() => setDisplayCount((c) => c + 60)}
+                className="px-5 py-2.5 rounded-xl text-sm font-medium bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 transition-colors"
+              >
+                Afficher plus ({filteredItems.length - displayCount} restants)
+              </button>
+            </div>
+          )}
+
+          {/* Barre d'action de la sélection multiple (#5) */}
+          {selectMode && selectedIds.size > 0 && (
+            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-neutral-900 border border-blue-500/60 rounded-2xl px-4 py-2.5 shadow-2xl">
+              <span className="text-sm text-white font-medium">{selectedIds.size} sélectionné{selectedIds.size > 1 ? "s" : ""}</span>
+              <button
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent("mydrive-request-move-batch", { detail: { ids: Array.from(selectedIds) } }));
+                }}
+                className="px-3 py-1.5 rounded-lg text-sm bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+              >Déplacer vers…</button>
+              <button
+                onClick={async () => {
+                  if (!confirm(`Mettre ${selectedIds.size} élément(s) à la corbeille ?`)) return;
+                  for (const pid of Array.from(selectedIds)) {
+                    const it = items.find((i) => placementId(i) === pid);
+                    if (it) await handleDeleteItem(it.id, it.image_path || "", it.alias_id);
+                  }
+                  exitSelectMode();
+                }}
+                className="px-3 py-1.5 rounded-lg text-sm bg-red-600/80 hover:bg-red-600 text-white transition-colors"
+              >Supprimer</button>
+              <button onClick={exitSelectMode} className="px-2 py-1.5 text-sm text-neutral-400 hover:text-white">Annuler</button>
+            </div>
           )}
 
           <footer className="mt-12 pt-8 pb-4 border-t border-neutral-800">
