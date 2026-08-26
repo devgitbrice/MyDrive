@@ -556,6 +556,9 @@ export default function TableGrid({ data, setData }: TableGridProps) {
                   const hasError = hasFormula && display.startsWith("#");
                   const isNumeric = cell !== "" && !isNaN(Number(cell));
                   const cellUrl = !hasFormula ? normalizeUrl(display) : null;
+                  // Colonne "Fonctionnel" (d'après l'en-tête ligne 1) → menu déroulant ✅/❌
+                  const headerLabel = (data[0]?.[c] || "").trim().toLowerCase();
+                  const isStatusCell = r > 0 && (headerLabel === "fonctionnel" || headerLabel === "fonctionnel ?");
 
                   return (
                     <td
@@ -564,10 +567,25 @@ export default function TableGrid({ data, setData }: TableGridProps) {
                         ${isActive ? "outline outline-2 outline-blue-500 z-[2]" : ""}
                         ${isSelected && !isActive ? "bg-blue-500/15" : "bg-neutral-950"}
                       `}
-                      onMouseDown={(e) => handleCellMouseDown(r, c, e)}
+                      onMouseDown={(e) => { if (!isStatusCell) handleCellMouseDown(r, c, e); }}
                       onMouseEnter={() => handleMouseEnter(r, c)}
                     >
-                      {isEditing ? (
+                      {isStatusCell ? (
+                        <select
+                          value={cell}
+                          onMouseDown={(e) => { e.stopPropagation(); setActiveCell({ r, c }); setSelection({ start: { r, c }, end: { r, c } }); }}
+                          onChange={(e) => {
+                            const nd = data.map((row) => [...row]);
+                            nd[r][c] = e.target.value;
+                            setData(nd);
+                          }}
+                          className={`w-full h-full bg-transparent outline-none text-center cursor-pointer appearance-none text-base ${cell === "✅" ? "text-green-400" : cell === "❌" ? "text-red-400" : "text-neutral-500"}`}
+                        >
+                          <option value="" style={{ background: "#171717", color: "#a3a3a3" }}>—</option>
+                          <option value="✅" style={{ background: "#171717", color: "#4ade80" }}>✅ Fonctionne</option>
+                          <option value="❌" style={{ background: "#171717", color: "#f87171" }}>❌ Ne fonctionne pas</option>
+                        </select>
+                      ) : isEditing ? (
                         <input
                           ref={inputRef}
                           className={`absolute inset-0 w-full h-full px-1 outline-none border-2 text-sm z-10 ${

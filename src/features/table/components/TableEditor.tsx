@@ -129,6 +129,7 @@ export default function TableEditor({ initialData }: TableEditorProps) {
     <div className="flex flex-col h-dvh w-full bg-neutral-900 text-white overflow-hidden">
       <FileSearchModal open={fileSearchOpen} onClose={() => setFileSearchOpen(false)} onInsert={handleInsertDocLink} />
       <TableHeader
+        id={initialData?.id}
         title={title} setTitle={setTitle}
         description={description} setDescription={setDescription}
         onSave={handleSave} status={status}

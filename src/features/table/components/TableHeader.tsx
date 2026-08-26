@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { Mic, MicOff, Loader2 } from "lucide-react";
 import { useVoiceDictation } from "@/hooks/useVoiceDictation";
+import ItemCodeBadge from "@/features/mydrive/components/ItemCodeBadge";
 
 type TableHeaderProps = {
+  id?: string;
   title: string;
   setTitle: (t: string) => void;
   description: string;
@@ -15,6 +17,7 @@ type TableHeaderProps = {
 };
 
 export default function TableHeader({
+  id,
   title,
   setTitle,
   description,
@@ -33,13 +36,16 @@ export default function TableHeader({
     <header className="border-b border-neutral-800 bg-neutral-900 p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 space-y-1">
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Titre du tableau..."
-            className="w-full bg-transparent text-2xl font-bold text-white placeholder-neutral-600 outline-none"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Titre du tableau..."
+              className="flex-1 bg-transparent text-2xl font-bold text-white placeholder-neutral-600 outline-none"
+            />
+            {id && <ItemCodeBadge id={id} variant="inline" />}
+          </div>
           <input
             type="text"
             value={description}
