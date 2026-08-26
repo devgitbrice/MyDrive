@@ -42,6 +42,8 @@ export default function TableEditor({ initialData }: TableEditorProps) {
   const [status, setStatus] = useState<"idle" | "saving">("idle");
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Empêche l'auto-save au montage : on ne sauve qu'après une vraie édition.
+  const userEditedRef = useRef(false);
 
   // --- AUTO-SAVE (edit mode only, debounce 1.5s) ---
   const autoSave = useCallback(async () => {
@@ -86,9 +88,13 @@ export default function TableEditor({ initialData }: TableEditorProps) {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Watch for data changes to trigger auto-save in edit mode
+  // Watch for data changes to trigger auto-save in edit mode.
+  // On ignore le tout premier passage (montage) pour ne pas réécrire le
+  // contenu initial par-dessus une éventuelle modification externe.
   useEffect(() => {
-    if (isEditMode) scheduleAutoSave();
+    if (!isEditMode) return;
+    if (!userEditedRef.current) { userEditedRef.current = true; return; }
+    scheduleAutoSave();
   }, [data, title, description, isEditMode, scheduleAutoSave]);
 
   const handleSave = async () => {
