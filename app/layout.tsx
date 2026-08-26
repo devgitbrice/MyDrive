@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import ChatBot from "@/components/ChatBot";
-import TaskManager from "@/components/TaskManager";
-import ClaudeButton from "@/components/ClaudeButton";
 import AuthGuard from "@/components/AuthGuard";
+import FloatingWidgets from "@/components/FloatingWidgets";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,9 +31,7 @@ export default function RootLayout({
       >
         <AuthGuard>
           {children}
-          <ChatBot />
-          <TaskManager />
-          <ClaudeButton />
+          <FloatingWidgets />
         </AuthGuard>
       </body>
     </html>
