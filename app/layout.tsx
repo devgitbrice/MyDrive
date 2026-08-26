@@ -4,6 +4,7 @@ import "./globals.css";
 import ChatBot from "@/components/ChatBot";
 import TaskManager from "@/components/TaskManager";
 import ClaudeButton from "@/components/ClaudeButton";
+import AuthGuard from "@/components/AuthGuard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,10 +31,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
-        <ChatBot />
-        <TaskManager />
-        <ClaudeButton />
+        <AuthGuard>
+          {children}
+          <ChatBot />
+          <TaskManager />
+          <ClaudeButton />
+        </AuthGuard>
       </body>
     </html>
   );

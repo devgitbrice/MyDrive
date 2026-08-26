@@ -6,6 +6,7 @@ import FolderView from "@/features/mydrive/components/FolderView";
 import { ItemCodeProvider } from "@/features/mydrive/components/ItemCodeProvider";
 import AddMenu from "@/components/AddMenu";
 import ThemeToggle from "@/components/ThemeToggle";
+import LogoutButton from "@/components/LogoutButton";
 
 // Re-render a chaque requete pour que les mutations Supabase externes
 // (curl, autre onglet, etc.) apparaissent sans hard refresh.
@@ -41,6 +42,7 @@ export default async function MyDrivePage() {
             <Settings size={20} />
           </Link>
           <ThemeToggle />
+          <LogoutButton />
         </div>
 
         <div className="flex flex-col items-end gap-2 ml-auto">
