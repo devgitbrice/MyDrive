@@ -184,6 +184,74 @@ export default function BlockManager({ initialHtml, tocOpen, onChange, chromeVis
     copiedTimer.current = setTimeout(() => setJustCopied(false), 2000);
   }, [copyBtn]);
 
+  // ─── Appui long (>1s) sur un lien : copie le lien au lieu de l'ouvrir ───
+  const [linkCopied, setLinkCopied] = useState<{ top: number; left: number } | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFiredRef = useRef(false);
+  const linkCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const anchorFrom = (t: EventTarget | null): HTMLAnchorElement | null => {
+      if (!(t instanceof HTMLElement)) return null;
+      const a = t.closest("a") as HTMLAnchorElement | null;
+      if (!a || !a.href) return null;
+      if (!a.closest(".block-editor-content")) return null;
+      return a;
+    };
+
+    const copyLink = async (href: string, x: number, y: number) => {
+      try { await navigator.clipboard.writeText(href); }
+      catch {
+        const ta = document.createElement("textarea");
+        ta.value = href; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } catch {}
+        document.body.removeChild(ta);
+      }
+      setLinkCopied({ top: y - 8, left: x + 12 });
+      if (linkCopiedTimer.current) clearTimeout(linkCopiedTimer.current);
+      linkCopiedTimer.current = setTimeout(() => setLinkCopied(null), 2000);
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      const a = anchorFrom(e.target);
+      if (!a) return;
+      longPressFiredRef.current = false;
+      const href = a.href;
+      const x = e.clientX, y = e.clientY;
+      longPressTimer.current = setTimeout(() => {
+        longPressFiredRef.current = true;
+        copyLink(href, x, y);
+      }, 1000);
+    };
+    const cancel = () => {
+      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    };
+    const onClick = (e: MouseEvent) => {
+      // Si l'appui long a copié, on annule l'ouverture du lien.
+      if (longPressFiredRef.current) {
+        const a = anchorFrom(e.target);
+        if (a) { e.preventDefault(); e.stopPropagation(); }
+        longPressFiredRef.current = false;
+      }
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("pointerup", cancel);
+    document.addEventListener("pointermove", cancel);
+    document.addEventListener("pointercancel", cancel);
+    document.addEventListener("click", onClick, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointerup", cancel);
+      document.removeEventListener("pointermove", cancel);
+      document.removeEventListener("pointercancel", cancel);
+      document.removeEventListener("click", onClick, true);
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+      if (linkCopiedTimer.current) clearTimeout(linkCopiedTimer.current);
+    };
+  }, []);
+
   return (
     <div className={`flex-1 overflow-hidden flex w-full min-w-0 ${light ? "bg-white" : "bg-neutral-950"}`}>
       <TocSidebar entries={tocEntries} tocOpen={tocOpen} />
@@ -226,6 +294,14 @@ export default function BlockManager({ initialHtml, tocOpen, onChange, chromeVis
             >
               {justCopied ? "Copié" : "Copier"}
             </button>
+          )}
+          {linkCopied && (
+            <span
+              style={{ position: "fixed", top: linkCopied.top, left: linkCopied.left, zIndex: 70 }}
+              className="px-2 py-1 rounded-md text-xs font-semibold bg-green-600 text-white border border-green-500 shadow-sm pointer-events-none"
+            >
+              Copié
+            </span>
           )}
           {focusedBlock && (
             <FocusModal
