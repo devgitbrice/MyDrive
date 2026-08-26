@@ -24,11 +24,35 @@ export function indexToCol(idx: number): string {
   return label;
 }
 
-/** Parse "A1" → {r:0, c:0} */
+/** Parse "A1" ou "$A$1" → {r:0, c:0} (les $ des références absolues sont ignorés au calcul) */
 function parseRef(ref: string): { r: number; c: number } {
-  const m = ref.match(/^([A-Z]+)(\d+)$/);
+  const m = ref.replace(/\$/g, "").match(/^([A-Z]+)(\d+)$/);
   if (!m) throw new Error(`Invalid ref: ${ref}`);
   return { r: parseInt(m[2], 10) - 1, c: colToIndex(m[1]) };
+}
+
+/** Convertit un index de colonne en lettres (0 → A). */
+function idxToCol(idx: number): string {
+  let s = "";
+  idx++;
+  while (idx > 0) { const m = (idx - 1) % 26; s = String.fromCharCode(65 + m) + s; idx = Math.floor((idx - 1) / 26); }
+  return s;
+}
+
+/**
+ * Décale les références d'une formule pour la recopie (fill / copier-coller).
+ * Les parties précédées de $ (colonne ou ligne absolue) ne bougent pas.
+ * Ex : shiftFormula("=A1+$B$2", 1, 0) → "=A2+$B$2"
+ */
+export function shiftFormula(formula: string, dr: number, dc: number): string {
+  if (!formula.startsWith("=")) return formula;
+  return formula.replace(/(\$?)([A-Z]+)(\$?)(\d+)/g, (_m, ac, col, ar, row) => {
+    let c = colToIndex(col);
+    let r = parseInt(row, 10) - 1;
+    if (!ac) c = Math.max(0, c + dc);
+    if (!ar) r = Math.max(0, r + dr);
+    return `${ac}${idxToCol(c)}${ar}${r + 1}`;
+  });
 }
 
 /** Expand "A1:C3" into flat array of cell values */
@@ -138,10 +162,10 @@ function tokenize(formula: string): Token[] {
       if (upper === "FALSE") { tokens.push({ type: "BOOL", value: false }); continue; }
 
       // Range: A1:B3
-      if (s[i] === ":" && /^[A-Z]+\d+$/i.test(id)) {
+      if (s[i] === ":" && /^\$?[A-Z]+\$?\d+$/i.test(id)) {
         i++; // skip ':'
         let id2 = "";
-        while (i < s.length && /[A-Za-z0-9]/.test(s[i])) { id2 += s[i++]; }
+        while (i < s.length && /[A-Za-z0-9$]/.test(s[i])) { id2 += s[i++]; }
         tokens.push({ type: "RANGE", value: upper + ":" + id2.toUpperCase() });
         continue;
       }
@@ -153,7 +177,7 @@ function tokenize(formula: string): Token[] {
       }
 
       // Cell reference: e.g. A1, BC23
-      if (/^[A-Z]+\d+$/.test(upper)) {
+      if (/^\$?[A-Z]+\$?\d+$/.test(upper)) {
         tokens.push({ type: "CELL", value: upper });
         continue;
       }

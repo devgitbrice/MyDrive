@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { computeCell, isFormula, indexToCol } from "../engine/formula";
+import { computeCell, isFormula, indexToCol, shiftFormula } from "../engine/formula";
 import {
   SheetModel, CellFormat, NumFormat, fmtKey, applyNumFormat,
   DEFAULT_COL_WIDTH, MIN_COL_WIDTH,
@@ -41,6 +41,9 @@ export default function TableGrid({ sheet, setSheet }: TableGridProps) {
   const [isSelecting, setIsSelecting] = useState(false);
   const [formulaMode, setFormulaMode] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; r: number; c: number } | null>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [replaceValue, setReplaceValue] = useState("");
 
   const inputRef = useRef<HTMLInputElement>(null);
   const formulaBarRef = useRef<HTMLInputElement>(null);
@@ -376,16 +379,18 @@ export default function TableGrid({ sheet, setSheet }: TableGridProps) {
         const h = from.maxR - from.minR + 1;
         for (let c = from.minC; c <= from.maxC; c++) {
           for (let r = from.maxR + 1; r <= target.r; r++) {
-            const src = cells[from.minR + ((r - from.minR) % h)][c];
-            cells[r][c] = src;
+            const srcR = from.minR + ((r - from.minR) % h);
+            const src = cells[srcR][c];
+            cells[r][c] = isFormula(src) ? shiftFormula(src, r - srcR, 0) : src;
           }
         }
       } else if (target.c > from.maxC) {
         const w = from.maxC - from.minC + 1;
         for (let r = from.minR; r <= from.maxR; r++) {
           for (let c = from.maxC + 1; c <= target.c; c++) {
-            const src = cells[r][from.minC + ((c - from.minC) % w)];
-            cells[r][c] = src;
+            const srcC = from.minC + ((c - from.minC) % w);
+            const src = cells[r][srcC];
+            cells[r][c] = isFormula(src) ? shiftFormula(src, 0, c - srcC) : src;
           }
         }
       }
@@ -558,6 +563,53 @@ export default function TableGrid({ sheet, setSheet }: TableGridProps) {
   }, [selBounds, displayData]);
 
   const colWidthOf = (c: number) => sheet.colWidths[c] || DEFAULT_COL_WIDTH;
+
+  // ─── Rechercher / Remplacer ───
+  const findNext = useCallback(() => {
+    const q = findQuery.toLowerCase();
+    if (!q) return;
+    const startR = activeCell?.r ?? 0, startC = activeCell?.c ?? -1;
+    for (let i = 0; i < rows * cols; i++) {
+      const flat = startR * cols + startC + 1 + i;
+      const r = Math.floor(flat / cols) % rows;
+      const c = flat % cols;
+      if ((data[r]?.[c] ?? "").toLowerCase().includes(q)) {
+        setActiveCell({ r, c });
+        setSelection({ start: { r, c }, end: { r, c } });
+        return;
+      }
+    }
+  }, [findQuery, activeCell, rows, cols, data]);
+
+  const replaceOne = useCallback(() => {
+    if (!activeCell || !findQuery) return;
+    const cur = data[activeCell.r]?.[activeCell.c] ?? "";
+    if (cur.toLowerCase().includes(findQuery.toLowerCase())) {
+      const re = new RegExp(findQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      setCellValue(activeCell.r, activeCell.c, cur.replace(re, replaceValue));
+    }
+    findNext();
+  }, [activeCell, findQuery, replaceValue, data, setCellValue, findNext]);
+
+  const replaceAll = useCallback(() => {
+    if (!findQuery) return;
+    const re = new RegExp(findQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    mutate((s) => {
+      const cells = s.cells.map((row) => row.map((v) => (typeof v === "string" && v.toLowerCase().includes(findQuery.toLowerCase()) ? v.replace(re, replaceValue) : v)));
+      return { ...s, cells };
+    });
+  }, [findQuery, replaceValue, mutate]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setFindOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // ─── Export / Import CSV ───
   const csvEscape = (v: string) => {
@@ -796,6 +848,25 @@ export default function TableGrid({ sheet, setSheet }: TableGridProps) {
           </tbody>
         </table>
       </div>
+
+      {/* ─── Rechercher / Remplacer ─── */}
+      {findOpen && (
+        <div className="absolute top-20 right-3 z-40 bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl p-2 flex flex-col gap-2 w-64">
+          <div className="flex items-center gap-1">
+            <input autoFocus value={findQuery} onChange={(e) => setFindQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") findNext(); if (e.key === "Escape") setFindOpen(false); }}
+              placeholder="Rechercher" className="flex-1 bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-sm text-white outline-none focus:border-blue-500" />
+            <button onClick={() => setFindOpen(false)} className="text-neutral-400 hover:text-white w-6 h-6">✕</button>
+          </div>
+          <input value={replaceValue} onChange={(e) => setReplaceValue(e.target.value)}
+            placeholder="Remplacer par" className="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-sm text-white outline-none focus:border-blue-500" />
+          <div className="flex gap-1">
+            <button onClick={findNext} className="flex-1 px-2 py-1 text-xs rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200">Suivant</button>
+            <button onClick={replaceOne} className="flex-1 px-2 py-1 text-xs rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200">Remplacer</button>
+            <button onClick={replaceAll} className="flex-1 px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500 text-white">Tout</button>
+          </div>
+        </div>
+      )}
 
       {/* ─── Menu contextuel ─── */}
       {contextMenu && (
