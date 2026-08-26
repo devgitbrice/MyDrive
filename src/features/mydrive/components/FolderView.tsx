@@ -13,6 +13,7 @@ import PendingCard from "./PendingCard";
 import ItemCodeBadge from "./ItemCodeBadge";
 import { useItemCodes } from "./ItemCodeProvider";
 import { codeFromId } from "@/features/mydrive/lib/itemCode";
+import { playClick } from "@/lib/clickSound";
 
 const UNFILED = "__unfiled__";
 const TRASH = "__trash__";
@@ -439,6 +440,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
             <Link
               href={`/mydrive?folder=${UNFILED}`}
               scroll={false}
+              onClick={() => playClick()}
               onDragOver={(e) => { e.preventDefault(); setDragOverId("__ROOT__"); }}
               onDragLeave={() => setDragOverId((v) => v === "__ROOT__" ? null : v)}
               onDrop={(e) => handleDrop(e, null)}
@@ -476,6 +478,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
                 <Link
                   href={`/mydrive?folder=${f.id}`}
                   scroll={false}
+                  onClick={() => playClick()}
                   className={`flex flex-col items-center justify-center bg-neutral-900 border rounded-xl aspect-square p-4 transition ${isOver ? "border-blue-500 bg-blue-500/10" : "border-neutral-800 hover:border-blue-500"}`}
                 >
                   <FolderIcon size={48} className={`${folderColor(f.id)} mb-2`} />
@@ -518,6 +521,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
             <Link
               href={`/mydrive?folder=${TRASH}`}
               scroll={false}
+              onClick={() => playClick()}
               className="group flex flex-col items-center justify-center bg-neutral-900 border border-neutral-800 rounded-xl aspect-square p-4 hover:border-red-500 transition"
             >
               <Trash2 size={44} className="text-neutral-500 group-hover:text-red-400 mb-2 transition" />
