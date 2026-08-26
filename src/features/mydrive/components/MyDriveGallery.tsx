@@ -58,14 +58,24 @@ function MiniSlidePreview({ content, slideIndex }: { content: string; slideIndex
   );
 }
 
-function PresentationCardWrapper({ item, imageHeightClass, children }: { item: MyDriveItem; imageHeightClass: string; children: (slideIndex: number) => React.ReactNode; }) {
+function PresentationCardWrapper({ item, imageHeightClass, children }: { item: MyDriveItem; imageHeightClass: string; children: (slideIndex: number, content: string) => React.ReactNode; }) {
   const [slideIndex, setSlideIndex] = useState(0);
-  const slideCount = useMemo(() => { try { return parseSlides(item.content || "").length; } catch { return 0; } }, [item.content]);
+  // Chargement paresseux du contenu : évite de rapatrier des Mo au chargement de MyDrive.
+  const [content, setContent] = useState<string>(item.content || "");
+  useEffect(() => {
+    if (content) return;
+    let alive = true;
+    supabase.from("MyDrive").select("content").eq("id", item.id).single()
+      .then(({ data }) => { if (alive && data?.content) setContent(data.content); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+  const slideCount = useMemo(() => { try { return parseSlides(content || "").length; } catch { return 0; } }, [content]);
   const goPrev = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setSlideIndex((i) => Math.max(0, i - 1)); };
   const goNext = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setSlideIndex((i) => Math.min(slideCount - 1, i + 1)); };
   return (
     <div className={`${imageHeightClass} w-full bg-neutral-950 relative overflow-hidden flex items-center justify-center group/slides`}>
-      {children(slideIndex)}
+      {children(slideIndex, content)}
       {slideCount > 1 && (
         <>
           {slideIndex > 0 && (
@@ -351,11 +361,11 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     );
     return (
       <>
-        {isPresentation && item.content ? (
+        {isPresentation ? (
           <PresentationCardWrapper item={item} imageHeightClass={imageHeightClass}>
-            {(slideIndex) => (
+            {(slideIndex, content) => (
               <>
-                <MiniSlidePreview content={item.content || ""} slideIndex={slideIndex} />
+                <MiniSlidePreview content={content} slideIndex={slideIndex} />
                 {typeConfig && (<div className={`absolute top-2 left-2 z-10 flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border shadow-sm ${typeConfig.bg} ${typeConfig.text} ${typeConfig.border}`}>{typeConfig.icon}<span>{typeConfig.label}</span></div>)}
                 {mirrorButton}
                 {moveButton}
