@@ -7,6 +7,18 @@ function colLabel(index: number): string {
   return indexToCol(index);
 }
 
+/** Renvoie une URL absolue si la valeur ressemble à un lien / nom de domaine, sinon null. */
+function normalizeUrl(value: string): string | null {
+  const s = (value || "").trim();
+  if (!s || /\s/.test(s)) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  // nom de domaine type "www.exemple.fr" ou "sous.exemple.com/chemin"
+  if (/^(https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}(\/[^\s]*)?$/i.test(s)) {
+    return "https://" + s.replace(/^\/+/, "");
+  }
+  return null;
+}
+
 interface TableGridProps {
   data: string[][];
   setData: (d: string[][]) => void;
@@ -25,6 +37,7 @@ export default function TableGrid({ data, setData }: TableGridProps) {
   } | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [formulaMode, setFormulaMode] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const formulaBarRef = useRef<HTMLInputElement>(null);
@@ -134,6 +147,13 @@ export default function TableGrid({ data, setData }: TableGridProps) {
         setFormulaMode(false);
       }
 
+      // Shift+clic : étendre la sélection depuis la cellule active, sans éditer
+      if (e.shiftKey && activeCell) {
+        setSelection({ start: activeCell, end: { r, c } });
+        setContextMenu(null);
+        return;
+      }
+
       // Select + enter edit on this cell
       setActiveCell({ r, c });
       setSelection({ start: { r, c }, end: { r, c } });
@@ -145,8 +165,53 @@ export default function TableGrid({ data, setData }: TableGridProps) {
       setEditValue(val);
       setFormulaMode(val.startsWith("="));
     },
-    [editingCell, formulaMode, data, editValue, setData]
+    [editingCell, formulaMode, data, editValue, setData, activeCell]
   );
+
+  // ─── Liens : ouvrir toutes les URL de la sélection ───
+  const openAllLinks = useCallback(() => {
+    setContextMenu(null);
+    if (!selection) return;
+    const minR = Math.min(selection.start.r, selection.end.r);
+    const maxR = Math.max(selection.start.r, selection.end.r);
+    const minC = Math.min(selection.start.c, selection.end.c);
+    const maxC = Math.max(selection.start.c, selection.end.c);
+    for (let r = minR; r <= maxR; r++) {
+      for (let c = minC; c <= maxC; c++) {
+        const url = normalizeUrl(displayData[r]?.[c] ?? "");
+        if (url) window.open(url, "_blank", "noopener,noreferrer");
+      }
+    }
+  }, [selection, displayData]);
+
+  const selectionUrlCount = useMemo(() => {
+    if (!selection) return 0;
+    const minR = Math.min(selection.start.r, selection.end.r);
+    const maxR = Math.max(selection.start.r, selection.end.r);
+    const minC = Math.min(selection.start.c, selection.end.c);
+    const maxC = Math.max(selection.start.c, selection.end.c);
+    let n = 0;
+    for (let r = minR; r <= maxR; r++)
+      for (let c = minC; c <= maxC; c++)
+        if (normalizeUrl(displayData[r]?.[c] ?? "")) n++;
+    return n;
+  }, [selection, displayData]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    if (!selection) return;
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }, [selection]);
+
+  // Fermer le menu contextuel sur clic ailleurs / Échap
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") setContextMenu(null); };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onEsc);
+    return () => { window.removeEventListener("click", close); window.removeEventListener("keydown", onEsc); };
+  }, [contextMenu]);
 
   const handleMouseEnter = (r: number, c: number) => {
     if (isSelecting && selection && !formulaMode) {
@@ -460,6 +525,7 @@ export default function TableGrid({ data, setData }: TableGridProps) {
         className="flex-1 overflow-auto focus:outline-none"
         tabIndex={0}
         onKeyDown={handleKeyDown}
+        onContextMenu={handleContextMenu}
       >
         <table className="border-collapse w-full" style={{ minWidth: cols * 100 }}>
           <thead className="sticky top-0 z-10">
@@ -489,6 +555,7 @@ export default function TableGrid({ data, setData }: TableGridProps) {
                   const hasFormula = isFormula(cell);
                   const hasError = hasFormula && display.startsWith("#");
                   const isNumeric = cell !== "" && !isNaN(Number(cell));
+                  const cellUrl = !hasFormula ? normalizeUrl(display) : null;
 
                   return (
                     <td
@@ -517,18 +584,35 @@ export default function TableGrid({ data, setData }: TableGridProps) {
                           }}
                         />
                       ) : (
-                        <span
-                          className={`block truncate leading-7 ${
-                            hasError
-                              ? "text-red-400 text-xs font-semibold"
-                              : hasFormula
-                                ? "text-emerald-300"
-                                : "text-white"
-                          }`}
-                          style={isNumeric || (hasFormula && !hasError) ? { textAlign: "right" } : undefined}
-                        >
-                          {display}
-                        </span>
+                        <>
+                          <span
+                            className={`block truncate leading-7 ${
+                              hasError
+                                ? "text-red-400 text-xs font-semibold"
+                                : hasFormula
+                                  ? "text-emerald-300"
+                                  : cellUrl
+                                    ? "text-blue-400 underline decoration-blue-400/40 pr-5"
+                                    : "text-white"
+                            }`}
+                            style={isNumeric || (hasFormula && !hasError) ? { textAlign: "right" } : undefined}
+                          >
+                            {display}
+                          </span>
+                          {cellUrl && (
+                            <a
+                              href={cellUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={`Ouvrir ${cellUrl}`}
+                              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-0.5 top-1/2 -translate-y-1/2 z-[3] w-5 h-5 flex items-center justify-center rounded text-blue-400 hover:text-white hover:bg-blue-600"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M14 5h5v5M19 5l-7 7M12 5H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-5" /></svg>
+                            </a>
+                          )}
+                        </>
                       )}
                     </td>
                   );
@@ -538,6 +622,25 @@ export default function TableGrid({ data, setData }: TableGridProps) {
           </tbody>
         </table>
       </div>
+
+      {/* ─── Menu contextuel (clic droit) ─── */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 min-w-[220px] bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl py-1 text-sm"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={openAllLinks}
+            disabled={selectionUrlCount === 0}
+            className="w-full text-left px-4 py-2 flex items-center gap-2 text-neutral-200 hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M14 5h5v5M19 5l-7 7M12 5H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-5" /></svg>
+            Ouvrir tous les liens
+            {selectionUrlCount > 0 && <span className="ml-auto text-xs text-neutral-500">({selectionUrlCount})</span>}
+          </button>
+        </div>
+      )}
 
       {/* ─── Status bar (selection info like Excel) ─── */}
       {selectionInfo && (
