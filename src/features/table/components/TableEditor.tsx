@@ -9,6 +9,7 @@ import TableGrid from "./TableGrid";
 import TableTags from "./TableTags";
 import FileSearchModal, { type SearchResult } from "@/components/FileSearchModal";
 import type { Tag } from "@/features/mydrive/types";
+import { SheetModel, loadSheet } from "../sheetModel";
 
 interface TableEditorProps {
   initialData?: {
@@ -27,16 +28,7 @@ export default function TableEditor({ initialData }: TableEditorProps) {
   const [title, setTitle] = useState(initialData?.title || "");
   const [description, setDescription] = useState(initialData?.observation || "");
 
-  const [data, setData] = useState<any[]>(() => {
-    if (initialData?.content) {
-      try {
-        return JSON.parse(initialData.content);
-      } catch {
-        return Array.from({ length: 20 }, () => Array(10).fill(""));
-      }
-    }
-    return Array.from({ length: 20 }, () => Array(10).fill(""));
-  });
+  const [sheet, setSheet] = useState<SheetModel>(() => loadSheet(initialData?.content));
 
   const [selectedTags, setSelectedTags] = useState<Tag[]>(initialData?.tags || []);
   const [status, setStatus] = useState<"idle" | "saving">("idle");
@@ -52,7 +44,7 @@ export default function TableEditor({ initialData }: TableEditorProps) {
     try {
       await updateDriveItemAction(initialData!.id, {
         title: title.trim(),
-        content: JSON.stringify(data),
+        content: JSON.stringify(sheet),
         observation: description,
       });
     } catch (e) {
@@ -60,7 +52,7 @@ export default function TableEditor({ initialData }: TableEditorProps) {
     } finally {
       setStatus("idle");
     }
-  }, [isEditMode, initialData, title, data, description]);
+  }, [isEditMode, initialData, title, sheet, description]);
 
   const scheduleAutoSave = useCallback(() => {
     if (!isEditMode) return;
@@ -95,7 +87,7 @@ export default function TableEditor({ initialData }: TableEditorProps) {
     if (!isEditMode) return;
     if (!userEditedRef.current) { userEditedRef.current = true; return; }
     scheduleAutoSave();
-  }, [data, title, description, isEditMode, scheduleAutoSave]);
+  }, [sheet, title, description, isEditMode, scheduleAutoSave]);
 
   const handleSave = async () => {
     if (!title.trim()) return alert("Le titre est obligatoire");
@@ -105,14 +97,14 @@ export default function TableEditor({ initialData }: TableEditorProps) {
       if (isEditMode) {
         await updateDriveItemAction(initialData!.id, {
           title: title.trim(),
-          content: JSON.stringify(data),
+          content: JSON.stringify(sheet),
           observation: description,
         });
         setStatus("idle");
       } else {
         const docId = await createDocRow({
           title: title.trim(),
-          content: JSON.stringify(data),
+          content: JSON.stringify(sheet),
           doc_type: "table",
           // @ts-ignore
           observation: description,
@@ -146,7 +138,7 @@ export default function TableEditor({ initialData }: TableEditorProps) {
       />
 
       <div className="flex-1 relative bg-black min-h-0">
-        <TableGrid data={data} setData={setData} />
+        <TableGrid sheet={sheet} setSheet={setSheet} />
       </div>
 
       <div className="bg-neutral-900 border-t border-neutral-800 p-4">
