@@ -15,6 +15,7 @@ import ItemCodeBadge from "./ItemCodeBadge";
 import { useItemCodes } from "./ItemCodeProvider";
 import { codeFromId } from "@/features/mydrive/lib/itemCode";
 import { playClick } from "@/lib/clickSound";
+import UpcomingPayments from "./UpcomingPayments";
 
 const UNFILED = "__unfiled__";
 const TRASH = "__trash__";
@@ -445,6 +446,8 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
           )}
         </div>
       )}
+
+      {folderId === null && <UpcomingPayments />}
 
       {(currentSubfolders.length > 0 || showUnfiledTile) && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">

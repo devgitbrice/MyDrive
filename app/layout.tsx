@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   title: "MyDrive",
   description: "MyDrive - votre suite de productivite : documents, tables, mindmaps, presentations et photos.",
   robots: { index: false, follow: false },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "MyDrive" },
 };
 
 export default function RootLayout({
