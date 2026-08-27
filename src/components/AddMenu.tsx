@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { toast } from "@/components/Toaster";
 import { useRouter } from "next/navigation";
-import { Plus, FileText, Code2, Brain, Table2, Presentation, Plane, Palette, Upload, Clock, ScanLine } from "lucide-react";
+import { Plus, FileText, Code2, Brain, Table2, Presentation, Palette, Upload, Clock, ScanLine } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 function getParentFromCookie(): string | null {
@@ -21,7 +21,6 @@ const OPTIONS: { kind: Kind; label: string; sub: string; icon: React.ReactNode; 
   { kind: "mindmap",      label: "Mindmap",      sub: "Carte mentale",           icon: <Brain size={20} />,        color: "text-purple-400 border-purple-500 hover:bg-purple-500 hover:text-white" },
   { kind: "table",        label: "Table",        sub: "Feuille de calcul",       icon: <Table2 size={20} />,       color: "text-green-400 border-green-500 hover:bg-green-500 hover:text-white" },
   { kind: "presentation", label: "Presentation", sub: "Diapositives",            icon: <Presentation size={20} />, color: "text-orange-400 border-orange-500 hover:bg-orange-500 hover:text-white" },
-  { kind: "voyage",       label: "Voyage",       sub: "Itineraire de voyage",    icon: <Plane size={20} />,        color: "text-sky-400 border-sky-500 hover:bg-sky-500 hover:text-white" },
   { kind: "draw",         label: "Draw",         sub: "Dessin (Apple Pencil)",   icon: <Palette size={20} />,      color: "text-pink-400 border-pink-500 hover:bg-pink-500 hover:text-white" },
   { kind: "file",         label: "Fichier",      sub: "Photo, image, PDF...",    icon: <Upload size={20} />,       color: "text-white border-neutral-500 hover:bg-white hover:text-black" },
   { kind: "pending",      label: "En attente",   sub: "Placeholder a uploader",  icon: <Clock size={20} />,        color: "text-amber-400 border-amber-500 hover:bg-amber-500 hover:text-black" },
