@@ -2,17 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { authFetch } from "@/lib/authFetch";
-
-type Task = {
-  id: string;
-  text: string;
-  createdAt: number;
-  audioBase64?: string;
-  audioMime?: string;
-  transcribing?: boolean;
-};
-
-const STORAGE_KEY = "app-tasks-v1";
+import { supabase } from "@/lib/supabaseClient";
+import { AppTask as Task, fetchTasks, addTask, updateTaskText, removeTask, migrateLegacyTasks } from "@/features/tasks/tasksApi";
+import { toast } from "@/components/Toaster";
 
 export default function TaskManager() {
   const [isOpen, setIsOpen] = useState(false);
@@ -25,35 +17,35 @@ export default function TaskManager() {
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Load from localStorage
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setTasks(JSON.parse(raw));
-    } catch {
-      // ignore
-    }
+  const reload = useCallback(async () => {
+    try { setTasks(await fetchTasks()); } catch {}
   }, []);
 
-  // Persist
+  // Chargement initial : migration des anciennes tâches locales puis fetch Supabase.
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-    } catch {
-      // ignore (quota)
-    }
-  }, [tasks]);
+    (async () => {
+      await migrateLegacyTasks();
+      await reload();
+    })();
+    // Realtime : tâches ajoutées/supprimées ailleurs (autre appareil, Claude) apparaissent en direct.
+    const channel = supabase
+      .channel("app-tasks-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "app_tasks" }, () => reload())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [reload]);
 
-  const addTextTask = useCallback(() => {
+  const addTextTask = useCallback(async () => {
     const text = input.trim();
     if (!text) return;
-    const task: Task = {
-      id: Date.now().toString(),
-      text,
-      createdAt: Date.now(),
-    };
-    setTasks((prev) => [task, ...prev]);
     setInput("");
+    try {
+      const t = await addTask(text);
+      setTasks((prev) => [t, ...prev]);
+    } catch (e: any) {
+      toast("Erreur ajout tâche : " + (e?.message || ""));
+      setInput(text);
+    }
   }, [input]);
 
   const blobToBase64 = (blob: Blob): Promise<string> =>
@@ -86,6 +78,7 @@ export default function TaskManager() {
           t.id === taskId ? { ...t, text, transcribing: false } : t
         )
       );
+      try { await updateTaskText(taskId, text); } catch {}
     } catch {
       setTasks((prev) =>
         prev.map((t) =>
@@ -94,6 +87,7 @@ export default function TaskManager() {
             : t
         )
       );
+      try { await updateTaskText(taskId, "(erreur de transcription)"); } catch {}
     }
   };
 
@@ -119,17 +113,17 @@ export default function TaskManager() {
         streamRef.current = null;
 
         const base64 = await blobToBase64(blob);
-        const id = Date.now().toString();
-        const task: Task = {
-          id,
-          text: "Transcription en cours...",
-          createdAt: Date.now(),
-          audioBase64: base64,
-          audioMime: mimeType,
-          transcribing: true,
-        };
+        // Crée d'abord la tâche en base (placeholder), puis transcrit et met à jour.
+        let created: Task;
+        try {
+          created = await addTask("Transcription en cours...");
+        } catch (e: any) {
+          toast("Erreur : " + (e?.message || ""));
+          return;
+        }
+        const task: Task = { ...created, audioBase64: base64, audioMime: mimeType, transcribing: true };
         setTasks((prev) => [task, ...prev]);
-        transcribeAudio(id, base64, mimeType);
+        transcribeAudio(created.id, base64, mimeType);
       };
 
       recorder.start();
@@ -152,6 +146,7 @@ export default function TaskManager() {
 
   const deleteTask = (id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
+    removeTask(id).catch(() => reload());
   };
 
   const formatTaskForCopy = (t: Task, index: number) =>
