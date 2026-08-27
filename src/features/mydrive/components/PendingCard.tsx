@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { toast } from "@/components/Toaster";
 import { Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadToMyDrive } from "@/lib/uploadToMyDrive";
@@ -41,7 +42,7 @@ export default function PendingCard({ item, imageHeightClass }: Props) {
         .eq("id", item.id);
       if (error) throw new Error(error.message);
     } catch (err: any) {
-      alert("Erreur upload : " + err.message);
+      toast("Erreur upload : " + err.message);
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -55,7 +56,7 @@ export default function PendingCard({ item, imageHeightClass }: Props) {
     try {
       await deleteDriveItemAction(item.id, "");
     } catch (err: any) {
-      alert("Erreur : " + err.message);
+      toast("Erreur : " + err.message);
     }
   }
 

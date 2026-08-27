@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { toast } from "@/components/Toaster";
 import { createDocRow } from "@/lib/createDocRow";
 import { addTagToItemAction, updateDriveItemAction } from "@/features/mydrive/modify";
 import PresentationHeader from "./PresentationHeader";
@@ -204,7 +205,7 @@ export default function PresentationEditor({ initialData }: PresentationEditorPr
   }, [slides, docTitle, description, presentationStyles, slideCategories, scheduleAutoSave]);
 
   const handleSave = async () => {
-    if (!docTitle.trim()) return alert("Le titre est requis");
+    if (!docTitle.trim()) return toast("Le titre est requis");
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     setStatus("saving");
     try {

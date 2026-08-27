@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { toast } from "@/components/Toaster";
 import type { Slide, SlideCategory } from "../types";
 import { createDefaultSlide } from "../types";
 
@@ -55,7 +56,7 @@ export default function PresentationSidebar({
 
   const deleteSlide = (e: React.MouseEvent, realIndex: number) => {
     e.stopPropagation();
-    if (slides.length <= 1) return alert("Il faut au moins une diapositive.");
+    if (slides.length <= 1) return toast("Il faut au moins une diapositive.");
     const newSlides = slides.filter((_, i) => i !== realIndex);
     setSlides(newSlides);
     if (currentIndex >= newSlides.length) setCurrentIndex(newSlides.length - 1);

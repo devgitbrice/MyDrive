@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { toast } from "@/components/Toaster";
 import type { MyDriveItem, Tag } from "@/features/mydrive/types";
 import ImageEditor from "./ImageEditor";
 import TagSelector from "./TagSelector";
@@ -167,7 +168,7 @@ export default function SwipeableOverlay({
   const handleSaveEditedImage = async (blob: Blob) => {
     if (!currentItem) return;
     if (!currentItem.image_path) {
-      alert("Erreur : chemin de l'image manquant, impossible de sauvegarder");
+      toast("Erreur : chemin de l'image manquant, impossible de sauvegarder");
       return;
     }
     setIsSaving(true);
@@ -182,7 +183,7 @@ export default function SwipeableOverlay({
 
       if (uploadError) {
         console.error("Erreur upload Supabase:", uploadError);
-        alert(`Erreur upload : ${uploadError.message}`);
+        toast(`Erreur upload : ${uploadError.message}`);
         return;
       }
 
@@ -200,7 +201,7 @@ export default function SwipeableOverlay({
       window.location.reload();
     } catch (error) {
       console.error("Erreur lors de la sauvegarde:", error);
-      alert(`Erreur : ${error instanceof Error ? error.message : "erreur inconnue"}`);
+      toast(`Erreur : ${error instanceof Error ? error.message : "erreur inconnue"}`);
     } finally {
       setIsSaving(false);
     }

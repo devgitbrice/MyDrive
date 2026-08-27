@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { toast } from "@/components/Toaster";
 import TagSelector from "@/features/mydrive/components/TagSelector";
 import { createPythonScriptAction, updateDriveItemAction } from "@/features/mydrive/modify";
 import { Tag } from "@/features/mydrive/types";
@@ -110,7 +111,7 @@ export default function PythonEditor({ allTags, initialData }: PythonEditorProps
           content: code,
           observation: description,
         });
-        alert("✅ Modifications enregistrées !");
+        toast("✅ Modifications enregistrées !");
       } else {
         // MODE CRÉATION
         const result = await createPythonScriptAction({
@@ -121,16 +122,16 @@ export default function PythonEditor({ allTags, initialData }: PythonEditorProps
         });
 
         if (result.success) {
-          alert("✅ Script enregistré !");
+          toast("✅ Script enregistré !");
           // Optionnel : rediriger vers l'URL d'édition pour ne pas recréer de doublons
           window.location.href = `/editpython/${result.id}`;
         } else {
           // @ts-ignore
-          alert(`❌ Erreur Supabase : ${result.message}`);
+          toast(`❌ Erreur Supabase : ${result.message}`);
         }
       }
     } catch (e: any) {
-      alert(`❌ Erreur technique : ${e.message}`);
+      toast(`❌ Erreur technique : ${e.message}`);
     }
   };
 

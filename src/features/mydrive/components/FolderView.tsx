@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
+import { toast } from "@/components/Toaster";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Folder as FolderIcon, FolderPlus, ChevronRight, Home, Trash2, Pencil, Link2, Search, Clock, RotateCcw } from "lucide-react";
@@ -261,7 +262,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
       setCreating(false);
       router.refresh();
     } catch (e: any) {
-      alert("Erreur : " + e.message);
+      toast("Erreur : " + e.message);
     }
   }
 
@@ -275,7 +276,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
       await moveItem(itemId, targetFolderId);
       router.refresh();
     } catch (er: any) {
-      alert("Erreur déplacement : " + er.message);
+      toast("Erreur déplacement : " + er.message);
     }
   }
 
@@ -289,7 +290,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
       await deleteFolder(f.id);
       router.refresh();
     } catch (e: any) {
-      alert("Erreur : " + e.message);
+      toast("Erreur : " + e.message);
     }
   }
 
@@ -300,7 +301,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
       await renameFolder(f.id, newN.trim());
       router.refresh();
     } catch (e: any) {
-      alert("Erreur : " + e.message);
+      toast("Erreur : " + e.message);
     }
   }
 
@@ -313,7 +314,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
         }
       } else if (picker.mode === "mirror") {
         const blocage = mirrorBlocker(picker.item, destParent, items);
-        if (blocage) { alert(blocage); return; }
+        if (blocage) { toast(blocage); return; }
         await createMirror(picker.item, destParent);
       } else {
         // Deplacer un miroir deplace le miroir, pas l'original.
@@ -322,7 +323,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
       setPicker(null);
       router.refresh();
     } catch (e: any) {
-      alert("Erreur : " + e.message);
+      toast("Erreur : " + e.message);
     }
   }
 
@@ -583,7 +584,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
                   <button
                     onClick={async () => {
                       const { error } = await supabase.from("MyDrive").update({ deleted_at: null }).eq("id", t.id);
-                      if (error) alert("Erreur : " + error.message); else router.refresh();
+                      if (error) toast("Erreur : " + error.message); else router.refresh();
                     }}
                     className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-neutral-800 hover:bg-green-600 text-neutral-300 hover:text-white transition-colors"
                     title="Restaurer"
@@ -595,7 +596,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
                       if (!confirm(`Supprimer définitivement « ${t.title} » ?`)) return;
                       if (t.image_path) await supabase.storage.from("MyDrive").remove([t.image_path]);
                       const { error } = await supabase.from("MyDrive").delete().eq("id", t.id);
-                      if (error) alert("Erreur : " + error.message); else router.refresh();
+                      if (error) toast("Erreur : " + error.message); else router.refresh();
                     }}
                     className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-neutral-800 hover:bg-red-600 text-neutral-300 hover:text-white transition-colors"
                     title="Supprimer définitivement"

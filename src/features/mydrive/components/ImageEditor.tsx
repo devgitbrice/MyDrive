@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { toast } from "@/components/Toaster";
 
 type Props = {
   imageUrl: string;
@@ -34,7 +35,7 @@ export default function ImageEditor({ imageUrl, mode, onSave, onCancel }: Props)
       setImage(img);
     };
     img.onerror = () => {
-      alert("Impossible de charger l'image. Veuillez réessayer.");
+      toast("Impossible de charger l'image. Veuillez réessayer.");
       onCancel();
     };
     img.src = imageUrl;
@@ -271,7 +272,7 @@ export default function ImageEditor({ imageUrl, mode, onSave, onCancel }: Props)
       const outputCanvas = document.createElement("canvas");
       const ctx = outputCanvas.getContext("2d");
       if (!ctx) {
-        alert("Erreur : impossible de créer le canvas");
+        toast("Erreur : impossible de créer le canvas");
         return;
       }
 
@@ -313,7 +314,7 @@ export default function ImageEditor({ imageUrl, mode, onSave, onCancel }: Props)
           if (blob) {
             onSave(blob);
           } else {
-            alert("Erreur lors de la conversion de l'image. Veuillez réessayer.");
+            toast("Erreur lors de la conversion de l'image. Veuillez réessayer.");
           }
         },
         "image/jpeg",
@@ -321,7 +322,7 @@ export default function ImageEditor({ imageUrl, mode, onSave, onCancel }: Props)
       );
     } catch (error) {
       console.error("Erreur lors de la transformation:", error);
-      alert("Erreur lors de la transformation de l'image. Veuillez réessayer.");
+      toast("Erreur lors de la transformation de l'image. Veuillez réessayer.");
     }
   };
 

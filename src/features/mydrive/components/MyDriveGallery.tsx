@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useCallback } from "react";
+import { toast } from "@/components/Toaster";
 import Link from "next/link";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -282,7 +283,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     const previousItems = [...items];
     setItems((prevItems) => prevItems.map((item) => item.id === id ? { ...item, ...updates } : item));
     try { const dbUpdates: Record<string, string> = {}; if (updates.title) dbUpdates.title = updates.title; if (updates.observation) dbUpdates.observation = updates.observation; await updateDriveItemAction(id, dbUpdates); }
-    catch (error) { console.error("Erreur sauvegarde", error); setItems(previousItems); alert("Erreur lors de la sauvegarde."); }
+    catch (error) { console.error("Erreur sauvegarde", error); setItems(previousItems); toast("Erreur lors de la sauvegarde."); }
   };
 
   const handleTagsChange = (itemId: string, newTags: Tag[]) => { setItems((prevItems) => prevItems.map((item) => item.id === itemId ? { ...item, tags: newTags } : item)); };
@@ -294,7 +295,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
     setItems((prevItems) => prevItems.filter((item) => item.id !== id));
     if (selectedIndex >= 0) { if (items.length <= 1) setSelectedIndex(-1); else if (selectedIndex >= deletedIndex && selectedIndex > 0) setSelectedIndex(selectedIndex - 1); }
     try { if (aliasId) await deleteMirror(aliasId); else await deleteDriveItemAction(id, imagePath); }
-    catch (error) { console.error("Erreur suppression", error); setItems(previousItems); alert("Erreur lors de la suppression."); }
+    catch (error) { console.error("Erreur suppression", error); setItems(previousItems); toast("Erreur lors de la suppression."); }
   };
 
   const myLinks = [

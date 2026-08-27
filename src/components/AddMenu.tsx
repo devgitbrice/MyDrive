@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { toast } from "@/components/Toaster";
 import { useRouter } from "next/navigation";
 import { Plus, FileText, Code2, Brain, Table2, Presentation, Plane, Palette, Upload, Clock, ScanLine } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
@@ -78,7 +79,7 @@ export default function AddMenu() {
       else if (kind === "pending") await createPending(trimmed);
       closeMenu();
     } catch (e: any) {
-      alert("Erreur : " + e.message);
+      toast("Erreur : " + e.message);
     } finally {
       setCreating(false);
     }

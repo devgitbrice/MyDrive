@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { toast } from "@/components/Toaster";
 import { useRouter } from "next/navigation";
 import { createDocRow } from "@/lib/createDocRow";
 import { addTagToItemAction, updateDriveItemAction } from "@/features/mydrive/modify";
@@ -90,7 +91,7 @@ export default function TableEditor({ initialData }: TableEditorProps) {
   }, [sheet, title, description, isEditMode, scheduleAutoSave]);
 
   const handleSave = async () => {
-    if (!title.trim()) return alert("Le titre est obligatoire");
+    if (!title.trim()) return toast("Le titre est obligatoire");
     setStatus("saving");
 
     try {
@@ -119,7 +120,7 @@ export default function TableEditor({ initialData }: TableEditorProps) {
     } catch (e) {
       console.error("Erreur sauvegarde:", e);
       setStatus("idle");
-      alert("Erreur lors de la sauvegarde");
+      toast("Erreur lors de la sauvegarde");
     }
   };
 
