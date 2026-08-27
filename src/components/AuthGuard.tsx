@@ -36,9 +36,27 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       if (!session && !isPublic(pathname)) router.replace("/login");
     });
 
+    // Rafraîchit le jeton dès que l'app redevient visible (iOS coupe le
+    // refresh auto en arrière-plan → sinon "Load failed" au retour).
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      supabase.auth.getSession().then(({ data }) => {
+        if (!data.session) return;
+        const exp = (data.session.expires_at ?? 0) * 1000;
+        // Si le token expire dans moins de 2 min (ou est expiré), on le renouvelle.
+        if (exp - Date.now() < 120_000) {
+          supabase.auth.refreshSession().catch(() => {});
+        }
+      });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
     return () => {
       mounted = false;
       sub.subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
   }, [pathname, router]);
 

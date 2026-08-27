@@ -257,13 +257,26 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
   async function handleCreate() {
     const name = newName.trim();
     if (!name) return;
+    const parent = folderId === UNFILED || folderId === null ? null : folderId;
     try {
-      await createFolder(name, folderId === UNFILED || folderId === null ? null : folderId);
+      await createFolder(name, parent);
       setNewName("");
       setCreating(false);
       router.refresh();
     } catch (e: any) {
-      toast("Erreur : " + e.message);
+      // Session périmée → on rafraîchit et on retente une fois.
+      const msg = String(e?.message || "");
+      if (/load failed|fetch|network|jwt|token|expired/i.test(msg)) {
+        try {
+          await supabase.auth.refreshSession();
+          await createFolder(name, parent);
+          setNewName("");
+          setCreating(false);
+          router.refresh();
+          return;
+        } catch {}
+      }
+      toast("Erreur : " + (e?.message || "création impossible"));
     }
   }
 
