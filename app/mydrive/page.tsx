@@ -2,8 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { Settings } from "lucide-react";
 import { fetchMyDrive, fetchAllTags } from "@/features/mydrive/lib/fetchMyDrive";
-import FolderView from "@/features/mydrive/components/FolderView";
-import { ItemCodeProvider } from "@/features/mydrive/components/ItemCodeProvider";
+import LiveDrive from "@/features/mydrive/components/LiveDrive";
 import AddMenu from "@/components/AddMenu";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
@@ -58,9 +57,7 @@ export default async function MyDrivePage() {
       </header>
 
       <Suspense fallback={null}>
-        <ItemCodeProvider items={items}>
-          <FolderView items={items} allTags={allTags} />
-        </ItemCodeProvider>
+        <LiveDrive initialItems={items} initialTags={allTags} />
       </Suspense>
     </main>
   );
