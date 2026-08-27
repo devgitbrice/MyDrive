@@ -34,6 +34,11 @@ export default function DocHeader({
   const copyShareLink = async () => {
     if (!id) return;
     const url = `${window.location.origin}/view/${id}`;
+    // Marque le doc comme partagé (ignoré si la colonne is_public n'existe pas encore)
+    try {
+      const { supabase } = await import("@/lib/supabaseClient");
+      await supabase.from("MyDrive").update({ is_public: true }).eq("id", id);
+    } catch {}
     try { await navigator.clipboard.writeText(url); } catch {
       const ta = document.createElement("textarea");
       ta.value = url; document.body.appendChild(ta); ta.select();

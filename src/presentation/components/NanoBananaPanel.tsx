@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { Banana, Send, X, Plus, Loader2 } from "lucide-react";
 
 type Props = {
@@ -28,7 +29,7 @@ export default function NanoBananaPanel({ onClose, onAddToSlide }: Props) {
     setAdded(false);
 
     try {
-      const res = await fetch("/api/generate-image", {
+      const res = await authFetch("/api/generate-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: trimmed }),

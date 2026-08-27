@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { Play, Pause, Square, Loader2 } from "lucide-react";
 
 interface Props {
@@ -63,7 +64,7 @@ function chunkText(text: string): string[] {
 }
 
 async function fetchAudioBlob(text: string): Promise<Blob> {
-  const r = await fetch("/api/tts", {
+  const r = await authFetch("/api/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, voice: "alloy", model: "gpt-4o-mini-tts", speed: 1 }),

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { authFetch } from "@/lib/authFetch";
 import { useTTSSettingsStore } from "@/store/ttsSettingsStore";
 
 type TTSState = "idle" | "loading" | "playing";
@@ -38,7 +39,7 @@ export function useTTS() {
         const controller = new AbortController();
         abortRef.current = controller;
 
-        const res = await fetch("/api/tts-openai", {
+        const res = await authFetch("/api/tts-openai", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

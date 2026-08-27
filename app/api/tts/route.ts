@@ -1,9 +1,12 @@
 import { NextRequest } from "next/server";
+import { requireUser } from "@/lib/apiAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireUser(req);
+  if (!auth.ok) return auth.res;
   const key = process.env.OPENAI_API_KEY;
   if (!key) {
     return new Response(

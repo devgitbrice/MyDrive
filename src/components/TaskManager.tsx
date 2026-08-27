@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { authFetch } from "@/lib/authFetch";
 
 type Task = {
   id: string;
@@ -73,7 +74,7 @@ export default function TaskManager() {
     mimeType: string
   ) => {
     try {
-      const res = await fetch("/api/transcribe", {
+      const res = await authFetch("/api/transcribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ audioBase64: base64, mimeType }),

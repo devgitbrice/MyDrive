@@ -17,6 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "MyDrive",
   description: "MyDrive - votre suite de productivite : documents, tables, mindmaps, presentations et photos.",
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({

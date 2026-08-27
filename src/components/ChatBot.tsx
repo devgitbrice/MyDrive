@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { authFetch } from "@/lib/authFetch";
 import ReactMarkdown from "react-markdown";
 
 type Message = {
@@ -46,7 +47,7 @@ export default function ChatBot() {
         .filter((m) => m.id !== "welcome")
         .map((m) => ({ role: m.role === "user" ? "user" : "bot", text: m.text }));
 
-      const res = await fetch("/api/chat", {
+      const res = await authFetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: trimmed, history }),

@@ -10,6 +10,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+
+  async function handleForgot() {
+    if (!email.trim()) { setError("Entre ton email d'abord, puis clique sur « Mot de passe oublié »."); return; }
+    setError(null);
+    try {
+      await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      setResetSent(true);
+    } catch (e: any) {
+      setError(e?.message || "Impossible d'envoyer l'email de réinitialisation.");
+    }
+  }
 
   // Déjà connecté → rediriger vers l'accueil
   useEffect(() => {
@@ -78,6 +92,7 @@ export default function LoginPage() {
         </div>
 
         {error && <p className="text-sm text-red-400">{error}</p>}
+        {resetSent && <p className="text-sm text-green-400">Email de réinitialisation envoyé — vérifie ta boîte mail.</p>}
 
         <button
           type="submit"
@@ -85,6 +100,14 @@ export default function LoginPage() {
           className="w-full rounded-xl bg-blue-600 hover:bg-blue-500 py-3 font-semibold disabled:opacity-50 transition-colors"
         >
           {loading ? "Connexion…" : "Se connecter"}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleForgot}
+          className="w-full text-center text-sm text-neutral-500 hover:text-neutral-300 transition-colors"
+        >
+          Mot de passe oublié ?
         </button>
       </form>
     </main>

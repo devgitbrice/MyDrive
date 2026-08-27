@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { authFetch } from "@/lib/authFetch";
 
 const WS_URL =
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
@@ -45,7 +46,7 @@ export function useVoiceDictation(onTranscript: (text: string) => void) {
 
     try {
       // Get API key from our backend
-      const tokenRes = await fetch("/api/voice-token");
+      const tokenRes = await authFetch("/api/voice-token");
       const tokenData = await tokenRes.json();
       if (!tokenData.apiKey) {
         setState("error");

@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, FileText, Code2, Brain, Table2, Presentation, Plane, Palette, Upload, Clock } from "lucide-react";
+import { Plus, FileText, Code2, Brain, Table2, Presentation, Plane, Palette, Upload, Clock, ScanLine } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 function getParentFromCookie(): string | null {
@@ -12,7 +12,7 @@ function getParentFromCookie(): string | null {
   return v && v !== "__unfiled__" ? v : null;
 }
 
-type Kind = "doc" | "python" | "mindmap" | "table" | "presentation" | "voyage" | "draw" | "file" | "pending";
+type Kind = "doc" | "python" | "mindmap" | "table" | "presentation" | "voyage" | "draw" | "file" | "pending" | "scan";
 
 const OPTIONS: { kind: Kind; label: string; sub: string; icon: React.ReactNode; color: string }[] = [
   { kind: "doc",          label: "Doc",          sub: "Document texte",          icon: <FileText size={20} />,     color: "text-blue-400 border-blue-500 hover:bg-blue-500 hover:text-white" },
@@ -24,6 +24,7 @@ const OPTIONS: { kind: Kind; label: string; sub: string; icon: React.ReactNode; 
   { kind: "draw",         label: "Draw",         sub: "Dessin (Apple Pencil)",   icon: <Palette size={20} />,      color: "text-pink-400 border-pink-500 hover:bg-pink-500 hover:text-white" },
   { kind: "file",         label: "Fichier",      sub: "Photo, image, PDF...",    icon: <Upload size={20} />,       color: "text-white border-neutral-500 hover:bg-white hover:text-black" },
   { kind: "pending",      label: "En attente",   sub: "Placeholder a uploader",  icon: <Clock size={20} />,        color: "text-amber-400 border-amber-500 hover:bg-amber-500 hover:text-black" },
+  { kind: "scan",         label: "Scan rapide",  sub: "Scanner avec la camera",  icon: <ScanLine size={20} />,     color: "text-rose-400 border-rose-500 hover:bg-rose-500 hover:text-white" },
 ];
 
 export default function AddMenu() {
@@ -89,6 +90,7 @@ export default function AddMenu() {
     if (kind === "mindmap") { router.push("/newmindmap"); closeMenu(); return; }
     if (kind === "table") { router.push("/newtable"); closeMenu(); return; }
     if (kind === "presentation") { router.push("/newpresentation"); closeMenu(); return; }
+    if (kind === "scan") { router.push("/quickscan"); closeMenu(); return; }
     if (kind === "file") { fileInputRef.current?.click(); return; }
     // voyage, draw, pending -> prompt title
     setPrompting({ kind, title: "" });

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireUser } from "@/lib/apiAuth";
 
 const OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireUser(req);
+  if (!auth.ok) return auth.res;
   try {
     const { text, voice, model, speed, response_format, instructions } =
       await req.json();

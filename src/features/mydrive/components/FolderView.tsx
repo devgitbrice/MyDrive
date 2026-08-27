@@ -105,6 +105,17 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Purge automatique de la corbeille : suppression définitive après 30 jours (#10)
+  useEffect(() => {
+    const cutoff = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+    supabase
+      .from("MyDrive")
+      .delete()
+      .lt("deleted_at", cutoff)
+      .then(({ error }) => { if (error && error.code !== "42703") console.warn("purge corbeille:", error.message); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // NB : plus de refetch complet au focus/visibilitychange — le Realtime
   // ci-dessus couvre déjà les mises à jour live, et recharger toute la table
   // à chaque retour sur l'app rendait la navigation lente sur mobile.

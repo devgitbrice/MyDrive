@@ -13,13 +13,28 @@ export default async function ViewDocPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { data: item, error } = await supabase
+  // Seuls les documents explicitement partagés (is_public) sont visibles.
+  // Repli : si la colonne n'existe pas encore (migration SQL non lancée),
+  // on garde l'ancien comportement pour ne pas casser les liens.
+  let item: any = null;
+  const withFlag = await supabase
     .from("MyDrive")
-    .select("id, title, observation, content, doc_type, type")
+    .select("id, title, observation, content, doc_type, type, is_public")
     .eq("id", id)
     .single();
+  if (withFlag.error && withFlag.error.code === "42703") {
+    const legacy = await supabase
+      .from("MyDrive")
+      .select("id, title, observation, content, doc_type, type")
+      .eq("id", id)
+      .single();
+    item = legacy.data;
+  } else if (!withFlag.error) {
+    item = withFlag.data;
+    if (item && item.is_public !== true) return notFound();
+  }
 
-  if (error || !item) return notFound();
+  if (!item) return notFound();
 
   return (
     <main className="min-h-dvh bg-neutral-950 text-white">
