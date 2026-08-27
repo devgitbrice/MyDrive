@@ -35,12 +35,31 @@ export default function TaskManager() {
       await migrateLegacyTasks();
       await reload();
     })();
-    // Realtime : tâches ajoutées/supprimées ailleurs (autre appareil, Claude) apparaissent en direct.
+    // Realtime : tâches ajoutées/supprimées/modifiées ailleurs (autre appareil,
+    // Claude) apparaissent en direct, sans rafraîchir la page.
+    let realtimeOk = false;
     const channel = supabase
       .channel("app-tasks-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "app_tasks" }, () => reload())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+      .subscribe((status) => {
+        realtimeOk = status === "SUBSCRIBED";
+      });
+
+    // Repli : si le Realtime n'est pas connecté (table non publiée, réseau…),
+    // on recharge périodiquement pour rester synchro malgré tout.
+    const poll = setInterval(() => { if (!realtimeOk) reload(); }, 5000);
+
+    // Recharge au retour sur l'onglet / l'app (couvre le cas iOS en arrière-plan).
+    const onVisible = () => { if (document.visibilityState === "visible") reload(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
   }, [reload]);
 
   const addTextTask = useCallback(async () => {
