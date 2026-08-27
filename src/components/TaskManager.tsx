@@ -6,6 +6,14 @@ import { supabase } from "@/lib/supabaseClient";
 import { AppTask as Task, fetchTasks, addTask, updateTaskText, removeTask, migrateLegacyTasks } from "@/features/tasks/tasksApi";
 import { toast } from "@/components/Toaster";
 
+// Code à 3 chiffres stable, dérivé de l'id de la tâche (déterministe : ne
+// change pas d'un rendu à l'autre).
+function taskCode(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return String(h % 1000).padStart(3, "0");
+}
+
 export default function TaskManager() {
   const [isOpen, setIsOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -315,6 +323,22 @@ export default function TaskManager() {
                   key={t.id}
                   className="bg-neutral-800 rounded-xl p-3 flex flex-col gap-2 border border-neutral-700"
                 >
+                  <button
+                    onClick={() => {
+                      const code = taskCode(t.id);
+                      navigator.clipboard?.writeText(code).catch(() => {});
+                      setCopiedId(t.id + "-code");
+                      setTimeout(() => setCopiedId((c) => (c === t.id + "-code" ? null : c)), 1500);
+                    }}
+                    title="Copier le code"
+                    className={`self-start px-2 py-0.5 rounded-md text-[11px] font-bold tracking-widest tabular-nums border transition-colors ${
+                      copiedId === t.id + "-code"
+                        ? "bg-green-600 text-white border-green-500"
+                        : "bg-neutral-900 text-neutral-400 border-neutral-700 hover:text-white hover:border-neutral-500"
+                    }`}
+                  >
+                    {copiedId === t.id + "-code" ? "Copié" : taskCode(t.id)}
+                  </button>
                   <div className="flex items-start gap-2">
                     <div className="flex-1 text-sm text-neutral-200 whitespace-pre-wrap break-words">
                       {t.transcribing ? (
