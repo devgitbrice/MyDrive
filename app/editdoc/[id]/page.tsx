@@ -14,6 +14,7 @@ function editUrlFor(id: string, docType: string | null): string {
     case "presentation": return `/editpresentation/${id}`;
     case "voyage": return `/editvoyage/${id}`;
     case "draw": return `/editdraw/${id}`;
+    case "fiche": return `/editfiche/${id}`;
     default: return `/editdoc/${id}`;
   }
 }

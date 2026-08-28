@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { toast } from "@/components/Toaster";
 import { useRouter } from "next/navigation";
-import { Plus, FileText, Code2, Brain, Table2, Presentation, Palette, Upload, Clock, ScanLine } from "lucide-react";
+import { Plus, FileText, Code2, Brain, Table2, Presentation, Palette, Upload, Clock, ScanLine, ClipboardList } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 function getParentFromCookie(): string | null {
@@ -13,7 +13,7 @@ function getParentFromCookie(): string | null {
   return v && v !== "__unfiled__" ? v : null;
 }
 
-type Kind = "doc" | "python" | "mindmap" | "table" | "presentation" | "voyage" | "draw" | "file" | "pending" | "scan";
+type Kind = "doc" | "python" | "mindmap" | "table" | "presentation" | "voyage" | "draw" | "fiche" | "file" | "pending" | "scan";
 
 const OPTIONS: { kind: Kind; label: string; sub: string; icon: React.ReactNode; color: string }[] = [
   { kind: "doc",          label: "Doc",          sub: "Document texte",          icon: <FileText size={20} />,     color: "text-blue-400 border-blue-500 hover:bg-blue-500 hover:text-white" },
@@ -22,6 +22,7 @@ const OPTIONS: { kind: Kind; label: string; sub: string; icon: React.ReactNode; 
   { kind: "table",        label: "Table",        sub: "Feuille de calcul",       icon: <Table2 size={20} />,       color: "text-green-400 border-green-500 hover:bg-green-500 hover:text-white" },
   { kind: "presentation", label: "Presentation", sub: "Diapositives",            icon: <Presentation size={20} />, color: "text-orange-400 border-orange-500 hover:bg-orange-500 hover:text-white" },
   { kind: "draw",         label: "Draw",         sub: "Dessin (Apple Pencil)",   icon: <Palette size={20} />,      color: "text-pink-400 border-pink-500 hover:bg-pink-500 hover:text-white" },
+  { kind: "fiche",        label: "Fiche projet", sub: "Suivi structuré",         icon: <ClipboardList size={20} />, color: "text-teal-400 border-teal-500 hover:bg-teal-500 hover:text-white" },
   { kind: "file",         label: "Fichier",      sub: "Photo, image, PDF...",    icon: <Upload size={20} />,       color: "text-white border-neutral-500 hover:bg-white hover:text-black" },
   { kind: "pending",      label: "En attente",   sub: "Placeholder a uploader",  icon: <Clock size={20} />,        color: "text-amber-400 border-amber-500 hover:bg-amber-500 hover:text-black" },
   { kind: "scan",         label: "Scan rapide",  sub: "Scanner avec la camera",  icon: <ScanLine size={20} />,     color: "text-rose-400 border-rose-500 hover:bg-rose-500 hover:text-white" },
@@ -46,6 +47,16 @@ export default function AddMenu() {
     }).select("id").single();
     if (error) throw new Error(error.message);
     router.push(`/editvoyage/${data!.id}`);
+  }
+
+  async function createFiche(title: string) {
+    const { data, error } = await supabase.from("MyDrive").insert({
+      title, type: "file", doc_type: "fiche",
+      image_path: "", image_url: "", observation: "", content: "",
+      parent_id: getParentFromCookie(),
+    }).select("id").single();
+    if (error) throw new Error(error.message);
+    router.push(`/editfiche/${data!.id}`);
   }
 
   async function createDraw(title: string) {
@@ -74,6 +85,7 @@ export default function AddMenu() {
     setCreating(true);
     try {
       if (kind === "voyage") await createVoyage(trimmed);
+      else if (kind === "fiche") await createFiche(trimmed);
       else if (kind === "draw") await createDraw(trimmed);
       else if (kind === "pending") await createPending(trimmed);
       closeMenu();

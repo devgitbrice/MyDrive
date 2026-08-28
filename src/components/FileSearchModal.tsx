@@ -17,6 +17,7 @@ const DOC_TYPE_LABELS: Record<string, { label: string; color: string }> = {
   table: { label: "Table", color: "text-green-400" },
   presentation: { label: "Présentation", color: "text-orange-400" },
   voyage: { label: "Voyage", color: "text-sky-400" },
+  fiche: { label: "Fiche", color: "text-teal-400" },
 };
 
 export function getEditUrl(item: SearchResult): string {
@@ -28,6 +29,7 @@ export function getEditUrl(item: SearchResult): string {
     case "presentation": return `/editpresentation/${item.id}`;
     case "voyage": return `/editvoyage/${item.id}`;
     case "draw": return `/editdraw/${item.id}`;
+    case "fiche": return `/editfiche/${item.id}`;
     default: return `/mydrive`;
   }
 }

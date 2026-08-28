@@ -33,6 +33,8 @@ const DOC_TYPE_CONFIG: Record<string, { icon: React.ReactNode; bg: string; text:
     icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>) },
   voyage: { label: "Voyage", bg: "bg-sky-500/20", text: "text-sky-400", border: "border-sky-500/40",
     icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l-7-7 3-3 4 4 8-8 3 3-11 11z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2 12C2 6.48 6.48 2 12 2s10 4.48 10 10-4.48 10-10 10S2 17.52 2 12z" /></svg>) },
+  fiche: { label: "Fiche", bg: "bg-teal-500/20", text: "text-teal-400", border: "border-teal-500/40",
+    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 12h6M9 16h4" /></svg>) },
 };
 
 function MiniSlidePreview({ content, slideIndex }: { content: string; slideIndex: number }) {
@@ -193,7 +195,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
 
   const contentTypes = [
     { key: "doc", label: "Doc", color: "blue" }, { key: "python", label: "Python", color: "yellow" }, { key: "mindmap", label: "Mindmap", color: "purple" }, { key: "table", label: "Table", color: "green" },
-    { key: "presentation", label: "Présentation", color: "orange" }, { key: "scan", label: "PDF / Scan", color: "rose" }, { key: "photo", label: "Photo", color: "cyan" }, { key: "voyage", label: "Voyage", color: "sky" },
+    { key: "presentation", label: "Présentation", color: "orange" }, { key: "scan", label: "PDF / Scan", color: "rose" }, { key: "photo", label: "Photo", color: "cyan" }, { key: "voyage", label: "Voyage", color: "sky" }, { key: "fiche", label: "Fiche", color: "teal" },
   ];
 
   const docTypeCounts = useMemo(() => { const counts: Record<string, number> = {}; items.forEach((item) => { const itemData = item as any; const type = itemData.doc_type || (itemData.image_url ? "photo" : null); if (type) counts[type] = (counts[type] || 0) + 1; }); return counts; }, [items]);
@@ -319,6 +321,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
       case "presentation": return `/editpresentation/${item.id}`;
       case "voyage": return `/editvoyage/${item.id}`;
       case "draw": return `/editdraw/${item.id}`;
+      case "fiche": return `/editfiche/${item.id}`;
       default: return null;
     }
   };
