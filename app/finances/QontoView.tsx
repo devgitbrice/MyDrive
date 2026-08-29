@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Paperclip, Search } from "lucide-react";
 
 interface QTx {
   date: string;
@@ -11,6 +11,9 @@ interface QTx {
   status: string;
   category: string;
   account: string;
+  reference: string;
+  note: string;
+  attachments: string;
 }
 
 const eur = (n: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 2 }).format(n || 0);
@@ -69,7 +72,11 @@ export default function QontoView() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const base = q ? ofYear.filter((t) => t.label.toLowerCase().includes(q) || t.category.toLowerCase().includes(q)) : ofYear;
+    const base = q
+      ? ofYear.filter((t) =>
+          t.label.toLowerCase().includes(q) || t.category.toLowerCase().includes(q) ||
+          t.reference.toLowerCase().includes(q) || t.note.toLowerCase().includes(q))
+      : ofYear;
     return [...base].sort((a, b) => b.date.localeCompare(a.date));
   }, [ofYear, query]);
 
@@ -147,20 +154,34 @@ export default function QontoView() {
         <ul className="space-y-1">
           {filtered.length === 0 && <li className="text-sm text-neutral-600">Aucune transaction.</li>}
           {filtered.slice(0, limit).map((t, i) => (
-            <li key={i} className={`flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900/40 px-2.5 py-2 ${t.status === "declined" ? "opacity-40" : ""}`}>
-              <span className="text-xs text-neutral-500 shrink-0 w-24">
-                {new Date(t.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}
-                <span className="text-neutral-600"> {new Date(t.date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>
-              </span>
-              <span className={`flex-1 min-w-0 truncate text-sm text-neutral-200 ${t.status === "declined" ? "line-through" : ""}`}>
-                {t.label}
-                {t.category ? <span className="text-neutral-500"> · {t.category}</span> : null}
-              </span>
-              {t.status === "pending" && <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 shrink-0">En cours</span>}
-              {t.status === "declined" && <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-500 shrink-0">Refusée</span>}
-              <span className={`text-sm font-semibold tabular-nums shrink-0 ${t.side === "credit" ? "text-green-400" : "text-red-400"}`}>
-                {t.side === "credit" ? "+" : "−"}{eur(t.amount)}
-              </span>
+            <li key={i} className={`rounded-lg border border-neutral-800 bg-neutral-900/40 px-2.5 py-2 ${t.status === "declined" ? "opacity-40" : ""}`}>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-neutral-500 shrink-0 w-24">
+                  {new Date(t.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}
+                  <span className="text-neutral-600"> {new Date(t.date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>
+                </span>
+                <span className={`flex-1 min-w-0 truncate text-sm text-neutral-200 ${t.status === "declined" ? "line-through" : ""}`}>
+                  {t.label}
+                  {t.category ? <span className="text-neutral-500"> · {t.category}</span> : null}
+                </span>
+                {t.status === "pending" && <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 shrink-0">En cours</span>}
+                {t.status === "declined" && <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-500 shrink-0">Refusée</span>}
+                <span className={`text-sm font-semibold tabular-nums shrink-0 ${t.side === "credit" ? "text-green-400" : "text-red-400"}`}>
+                  {t.side === "credit" ? "+" : "−"}{eur(t.amount)}
+                </span>
+              </div>
+              {(t.reference || t.note || t.attachments) && (
+                <div className="mt-1 ml-[6.75rem] space-y-0.5 text-xs text-neutral-500">
+                  {t.reference && <div className="truncate" title={t.reference}>Réf : {t.reference}</div>}
+                  {t.note && <div className="truncate" title={t.note}>Note : {t.note}</div>}
+                  {t.attachments && (
+                    <div className="truncate flex items-center gap-1" title={t.attachments}>
+                      <Paperclip size={11} className="shrink-0" />
+                      <span className="truncate">{t.attachments}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </li>
           ))}
         </ul>

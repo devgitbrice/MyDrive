@@ -20,6 +20,9 @@ export async function GET() {
         status: r.status,
         category: r.category || "",
         account: r["account name"] || "",
+        reference: (r.reference || "").trim(),
+        note: (r["internal note"] || "").trim(),
+        attachments: (r["attachment names"] || "").trim(),
       }));
     return Response.json({ ok: true, count: txs.length, transactions: txs });
   } catch (e) {
