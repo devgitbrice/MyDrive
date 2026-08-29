@@ -409,7 +409,7 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
       <ul className="space-y-1.5">
         {rapports.map((r) => (
           <li key={r.id}>
-            <a href={`/view/${r.id}`}
+            <a href={`/editdoc/${r.id}`}
               className="block text-sm text-teal-400 hover:text-teal-300 rounded-lg border border-neutral-800 bg-neutral-900/40 hover:border-neutral-600 px-2.5 py-2">
               {r.title}
             </a>
