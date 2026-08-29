@@ -207,6 +207,8 @@ const SubTitle = ({ children }: { children: React.ReactNode }) => (
 export default function FicheEditor({ item }: { item: any }) {
   const router = useRouter();
   const [title, setTitle] = useState(item.title || "");
+  // Nom du projet = nom du dossier parent (utilisé pour l'analyse et l'audio).
+  const [projetName, setProjetName] = useState<string>(item.title || "");
   const [fiche, setFiche] = useState<Fiche>(() => parseFiche(item.content));
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -241,11 +243,11 @@ export default function FicheEditor({ item }: { item: any }) {
   const generateAnalyse = useCallback(async () => {
     setGenerating(true);
     try {
-      const summary = buildSummary(fiche, title);
+      const summary = buildSummary(fiche, projetName);
       const res = await authFetch("/api/analyze-fiche", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ summary, projet: title }),
+        body: JSON.stringify({ summary, projet: projetName }),
       });
       const data = await res.json();
       if (!res.ok || !data.text) throw new Error(data.error || "Analyse indisponible");
@@ -255,7 +257,7 @@ export default function FicheEditor({ item }: { item: any }) {
     } finally {
       setGenerating(false);
     }
-  }, [fiche, title, update]);
+  }, [fiche, projetName, update]);
 
   // WAV silencieux (0 échantillon) pour débloquer l'audio dans le geste utilisateur iOS.
   const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
@@ -315,6 +317,7 @@ export default function FicheEditor({ item }: { item: any }) {
       const sorted = data
         .map((d: any) => ({ id: d.id, name: names[d.parent_id] || "" }))
         .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+      if (item.parent_id && names[item.parent_id]) setProjetName(names[item.parent_id]);
       const idx = sorted.findIndex((x) => x.id === item.id);
       if (idx === -1) return;
       setNav({
@@ -393,7 +396,11 @@ export default function FicheEditor({ item }: { item: any }) {
       </header>
 
       <input value={title} onChange={(e) => onTitle(e.target.value)} placeholder="Nom du projet"
-        className="w-full bg-transparent text-2xl font-semibold text-white outline-none mb-4 border-b border-transparent focus:border-neutral-700" />
+        className="w-full bg-transparent text-2xl font-semibold text-white outline-none border-b border-transparent focus:border-neutral-700" />
+      {projetName && projetName !== title && (
+        <p className="text-xs text-neutral-500 mb-4">Projet : <span className="text-neutral-300">{projetName}</span></p>
+      )}
+      {(!projetName || projetName === title) && <div className="mb-4" />}
 
       {/* Analyse IA + lecteur audio */}
       <div className="rounded-xl border border-teal-500/30 bg-teal-500/5 p-4 mb-4">
