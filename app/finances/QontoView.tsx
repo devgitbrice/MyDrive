@@ -34,7 +34,7 @@ const subcat = (t: QTx) => t.subcategory || NON_CLASSE;
 
 // Corrections manuelles de catégories, stockées dans un doc du drive
 // (les données Qonto venant du Sheet sont en lecture seule).
-type Override = { category?: string; subcategory?: string };
+type Override = { category?: string; subcategory?: string; contextNote?: string; project?: string };
 const OVERRIDES_TITLE = "Qonto — Catégories corrigées";
 
 export default function QontoView({ txs, error }: { txs: QTx[] | null; error: string | null }) {
@@ -79,9 +79,8 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
     });
   }, [txs, overrides]);
 
-  const setCategory = useCallback(async (tx: QTx, field: "category" | "subcategory", value: string) => {
-    const cleaned = value === NON_CLASSE ? "" : value;
-    const next = { ...overrides, [tx.id]: { ...overrides[tx.id], [field]: cleaned } };
+  const setOverride = useCallback(async (tx: QTx, patch: Partial<Override>) => {
+    const next = { ...overrides, [tx.id]: { ...overrides[tx.id], ...patch } };
     setOverrides(next);
     const content = JSON.stringify(next);
     if (ovDocId) {
@@ -346,9 +345,16 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
             </dl>
             <div className="mt-3 space-y-3">
               <CatPicker label="Catégorie générale" value={cat(current)} options={allCats}
-                onPick={(v) => setCategory(current, "category", v)} />
+                onPick={(v) => setOverride(current, { category: v === NON_CLASSE ? "" : v })} />
               <CatPicker label="Catégorie comptable" value={subcat(current)} options={allSubcats}
-                onPick={(v) => setCategory(current, "subcategory", v)} />
+                onPick={(v) => setOverride(current, { subcategory: v === NON_CLASSE ? "" : v })} />
+              <NoteEditor key={current.id} value={overrides[current.id]?.contextNote || ""}
+                onSave={(v) => setOverride(current, { contextNote: v })} />
+              <div className="flex gap-3 items-baseline text-sm">
+                <span className="w-40 shrink-0 text-neutral-500">Projet associé</span>
+                <span className="text-neutral-400">{overrides[current.id]?.project || "—"}</span>
+                <span className="text-[10px] text-neutral-600">(bientôt éditable)</span>
+              </div>
             </div>
             <dl className="space-y-2 text-sm mt-3">
               {current.reference && <Row k="Référence" v={current.reference} />}
@@ -443,6 +449,27 @@ function CatPicker({ label, value, options, onPick }: {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function NoteEditor({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [text, setText] = useState(value);
+  const dirty = text !== value;
+  return (
+    <div className="flex gap-3 text-sm">
+      <span className="w-40 shrink-0 text-neutral-500 pt-1">Notes de contexte</span>
+      <div className="flex-1 min-w-0">
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2}
+          placeholder="Décrire à quoi correspond cette dépense…"
+          className="w-full bg-neutral-800 border border-neutral-700 rounded-md px-2.5 py-1.5 text-sm text-white outline-none focus:border-blue-500 resize-y" />
+        {dirty && (
+          <button onClick={() => onSave(text)}
+            className="mt-1 px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-md">
+            Enregistrer
+          </button>
+        )}
+      </div>
     </div>
   );
 }
