@@ -9,9 +9,11 @@ import ShopView from "./ShopView";
 // (export Google Sheets servi par /api/qonto). Le chargement Qonto vit ici
 // pour alimenter à la fois la barre de fraîcheur et l'onglet Qonto.
 export default function FinancesTabs() {
-  const [tab, setTab] = useState<"suivi" | "qonto" | "shop">("suivi");
+  const [tab, setTab] = useState<"suivi" | "qonto" | "perso" | "shop">("suivi");
   const [txs, setTxs] = useState<QTx[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [bunqTxs, setBunqTxs] = useState<QTx[] | null>(null);
+  const [bunqError, setBunqError] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -27,6 +29,17 @@ export default function FinancesTabs() {
         setFetchedAt(data.fetchedAt || null);
       } catch {
         if (alive) setError("Impossible de charger les données Qonto.");
+      }
+    })();
+    (async () => {
+      try {
+        const res = await fetch("/api/bunq");
+        const data = await res.json();
+        if (!alive) return;
+        if (!data.ok) { setBunqError(data.error || "Erreur de chargement bunq"); return; }
+        setBunqTxs(data.transactions);
+      } catch {
+        if (alive) setBunqError("Impossible de charger les données bunq.");
       }
     })();
     const tick = setInterval(() => setNow(Date.now()), 10_000);
@@ -55,12 +68,19 @@ export default function FinancesTabs() {
           className={`px-4 py-2 text-sm font-semibold transition-colors ${tab === "qonto" ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
           Qonto
         </button>
+        <button onClick={() => setTab("perso")}
+          className={`px-4 py-2 text-sm font-semibold transition-colors ${tab === "perso" ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
+          Perso
+        </button>
         <button onClick={() => setTab("shop")}
           className={`px-4 py-2 text-sm font-semibold transition-colors ${tab === "shop" ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
           Shop
         </button>
       </div>
-      {tab === "suivi" ? <FinancesView /> : tab === "qonto" ? <QontoView txs={txs} error={error} /> : <ShopView />}
+      {tab === "suivi" ? <FinancesView />
+        : tab === "qonto" ? <QontoView txs={txs} error={error} />
+        : tab === "perso" ? <QontoView txs={bunqTxs} error={bunqError} subtitle="compte bunq perso" />
+        : <ShopView />}
     </div>
   );
 }

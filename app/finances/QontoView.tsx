@@ -37,7 +37,7 @@ const subcat = (t: QTx) => t.subcategory || NON_CLASSE;
 type Override = { category?: string; subcategory?: string; contextNote?: string; project?: string };
 const OVERRIDES_TITLE = "Qonto — Catégories corrigées";
 
-export default function QontoView({ txs, error }: { txs: QTx[] | null; error: string | null }) {
+export default function QontoView({ txs, error, subtitle = "compte Nouvo Media" }: { txs: QTx[] | null; error: string | null; subtitle?: string }) {
   const [year, setYear] = useState<string>("");
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(PAGE);
@@ -211,7 +211,7 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
             </button>
           ))}
         </div>
-        <span className="text-xs text-neutral-500">{ok.length} transactions · compte Nouvo Media</span>
+        <span className="text-xs text-neutral-500">{ok.length} transactions · {subtitle}</span>
       </div>
 
       {/* Cartes synthèse */}
