@@ -148,7 +148,10 @@ export default function QontoView() {
           {filtered.length === 0 && <li className="text-sm text-neutral-600">Aucune transaction.</li>}
           {filtered.slice(0, limit).map((t, i) => (
             <li key={i} className={`flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900/40 px-2.5 py-2 ${t.status === "declined" ? "opacity-40" : ""}`}>
-              <span className="text-xs text-neutral-500 shrink-0 w-16">{new Date(t.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}</span>
+              <span className="text-xs text-neutral-500 shrink-0 w-24">
+                {new Date(t.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}
+                <span className="text-neutral-600"> {new Date(t.date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>
+              </span>
               <span className={`flex-1 min-w-0 truncate text-sm text-neutral-200 ${t.status === "declined" ? "line-through" : ""}`}>
                 {t.label}
                 {t.category ? <span className="text-neutral-500"> · {t.category}</span> : null}
