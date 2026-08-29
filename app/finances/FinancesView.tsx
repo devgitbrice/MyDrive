@@ -28,8 +28,8 @@ export default function FinancesView() {
 
   const reload = useCallback(async () => {
     const [{ data: t }, { data: e }] = await Promise.all([
-      supabase.from("fin_transactions").select("id,date,label,amount,kind,scope,category").order("date", { ascending: false }),
-      supabase.from("fin_echeances").select("id,label,type,amount,due_date,scope,paid").order("due_date", { ascending: true }),
+      supabase.from("mydrive_finance_transactions").select("id,date,label,amount,kind,scope,category").order("date", { ascending: false }),
+      supabase.from("mydrive_finance_echeances").select("id,label,type,amount,due_date,scope,paid").order("due_date", { ascending: true }),
     ]);
     setTxs((t as Tx[]) || []);
     setEchs((e as Ech[]) || []);
@@ -39,8 +39,8 @@ export default function FinancesView() {
   useEffect(() => {
     reload();
     const ch = supabase.channel("finances-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "fin_transactions" }, () => reload())
-      .on("postgres_changes", { event: "*", schema: "public", table: "fin_echeances" }, () => reload())
+      .on("postgres_changes", { event: "*", schema: "public", table: "mydrive_finance_transactions" }, () => reload())
+      .on("postgres_changes", { event: "*", schema: "public", table: "mydrive_finance_echeances" }, () => reload())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [reload]);
@@ -66,23 +66,23 @@ export default function FinancesView() {
 
   // --- Mutations ---
   async function addTx(tx: Omit<Tx, "id">) {
-    const { error } = await supabase.from("fin_transactions").insert({ ...tx, user_id: await uid() });
+    const { error } = await supabase.from("mydrive_finance_transactions").insert({ ...tx, user_id: await uid() });
     if (error) toast("Erreur : " + error.message);
   }
   async function delTx(id: string) {
-    const { error } = await supabase.from("fin_transactions").delete().eq("id", id);
+    const { error } = await supabase.from("mydrive_finance_transactions").delete().eq("id", id);
     if (error) toast("Erreur : " + error.message);
   }
   async function addEch(e: Omit<Ech, "id" | "paid">) {
-    const { error } = await supabase.from("fin_echeances").insert({ ...e, paid: false, user_id: await uid() });
+    const { error } = await supabase.from("mydrive_finance_echeances").insert({ ...e, paid: false, user_id: await uid() });
     if (error) toast("Erreur : " + error.message);
   }
   async function togglePaid(e: Ech) {
-    const { error } = await supabase.from("fin_echeances").update({ paid: !e.paid, paid_at: !e.paid ? new Date().toISOString() : null }).eq("id", e.id);
+    const { error } = await supabase.from("mydrive_finance_echeances").update({ paid: !e.paid, paid_at: !e.paid ? new Date().toISOString() : null }).eq("id", e.id);
     if (error) toast("Erreur : " + error.message);
   }
   async function delEch(id: string) {
-    const { error } = await supabase.from("fin_echeances").delete().eq("id", id);
+    const { error } = await supabase.from("mydrive_finance_echeances").delete().eq("id", id);
     if (error) toast("Erreur : " + error.message);
   }
 
