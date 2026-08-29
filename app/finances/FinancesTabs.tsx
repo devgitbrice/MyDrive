@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import FinancesView from "./FinancesView";
 import QontoView, { type QTx } from "./QontoView";
+import ShopView from "./ShopView";
 
 // Onglets de la page Finances : suivi manuel (Supabase) et données Qonto
 // (export Google Sheets servi par /api/qonto). Le chargement Qonto vit ici
 // pour alimenter à la fois la barre de fraîcheur et l'onglet Qonto.
 export default function FinancesTabs() {
-  const [tab, setTab] = useState<"suivi" | "qonto">("suivi");
+  const [tab, setTab] = useState<"suivi" | "qonto" | "shop">("suivi");
   const [txs, setTxs] = useState<QTx[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
@@ -54,8 +55,12 @@ export default function FinancesTabs() {
           className={`px-4 py-2 text-sm font-semibold transition-colors ${tab === "qonto" ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
           Qonto
         </button>
+        <button onClick={() => setTab("shop")}
+          className={`px-4 py-2 text-sm font-semibold transition-colors ${tab === "shop" ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
+          Shop
+        </button>
       </div>
-      {tab === "suivi" ? <FinancesView /> : <QontoView txs={txs} error={error} />}
+      {tab === "suivi" ? <FinancesView /> : tab === "qonto" ? <QontoView txs={txs} error={error} /> : <ShopView />}
     </div>
   );
 }
