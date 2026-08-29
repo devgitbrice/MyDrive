@@ -2,7 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { ChevronLeft, LayoutGrid, Sparkles, Volume2, Loader2, Square } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight, LayoutGrid, Sparkles, Volume2, Loader2, Square } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { authFetch } from "@/lib/authFetch";
 import { toast } from "@/components/Toaster";
@@ -204,6 +205,7 @@ const SubTitle = ({ children }: { children: React.ReactNode }) => (
 );
 
 export default function FicheEditor({ item }: { item: any }) {
+  const router = useRouter();
   const [title, setTitle] = useState(item.title || "");
   const [fiche, setFiche] = useState<Fiche>(() => parseFiche(item.content));
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -296,6 +298,54 @@ export default function FicheEditor({ item }: { item: any }) {
 
   useEffect(() => () => { if (audioRef.current) audioRef.current.pause(); }, []);
 
+  // --- Navigation entre fiches (swipe gauche/droite sur mobile) ---
+  const [nav, setNav] = useState<{ prev?: string; next?: string; index: number; total: number }>({ index: -1, total: 0 });
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data } = await supabase.from("MyDrive")
+        .select("id, parent_id").eq("doc_type", "fiche").is("deleted_at", null);
+      if (!alive || !data) return;
+      const parents = Array.from(new Set(data.map((d: any) => d.parent_id).filter(Boolean)));
+      const names: Record<string, string> = {};
+      if (parents.length) {
+        const { data: f } = await supabase.from("MyDrive").select("id, title").in("id", parents);
+        (f || []).forEach((x: any) => { names[x.id] = x.title; });
+      }
+      const sorted = data
+        .map((d: any) => ({ id: d.id, name: names[d.parent_id] || "" }))
+        .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+      const idx = sorted.findIndex((x) => x.id === item.id);
+      if (idx === -1) return;
+      setNav({
+        prev: idx > 0 ? sorted[idx - 1].id : undefined,
+        next: idx < sorted.length - 1 ? sorted[idx + 1].id : undefined,
+        index: idx, total: sorted.length,
+      });
+    })();
+    return () => { alive = false; };
+  }, [item.id]);
+
+  const goPrev = useCallback(() => { if (nav.prev) router.push(`/editfiche/${nav.prev}`); }, [nav.prev, router]);
+  const goNext = useCallback(() => { if (nav.next) router.push(`/editfiche/${nav.next}`); }, [nav.next, router]);
+
+  // Détection du swipe horizontal (en ignorant les gestes partis d'un champ éditable).
+  const touch = useRef<{ x: number; y: number; el: EventTarget | null } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touch.current = { x: t.clientX, y: t.clientY, el: e.target };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touch.current; touch.current = null;
+    if (!start) return;
+    const el = start.el as HTMLElement | null;
+    if (el && el.closest && el.closest("input, textarea, select")) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x, dy = t.clientY - start.y;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return; // swipe horizontal net requis
+    if (dx < 0) goNext(); else goPrev();
+  };
+
   // --- Synthèse ---
   const counts = useMemo(() => {
     const pres = [p.site, p.appIos, p.ga4, p.linkedin, p.youtube, p.instagram, p.telegram, p.whatsapp, p.newsletter, p.podcast, p.pubMeta, p.pubGoogle];
@@ -318,10 +368,23 @@ export default function FicheEditor({ item }: { item: any }) {
     (v: Tri) => update((f) => ({ ...f, presence: { ...f.presence, [key]: { ...(f.presence[key] as Net), statut: v } } }));
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 pb-32">
+    <div className="max-w-2xl mx-auto px-4 py-6 pb-32" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <header className="flex items-center justify-between gap-3 mb-4">
         <Link href={backHref} className="text-neutral-500 hover:text-white transition-colors"><ChevronLeft size={22} /></Link>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {nav.total > 1 && (
+            <div className="flex items-center gap-1 text-neutral-500">
+              <button type="button" onClick={goPrev} disabled={!nav.prev} aria-label="Fiche précédente"
+                className="p-1 rounded-md hover:text-white hover:bg-neutral-800 disabled:opacity-30 transition-colors">
+                <ChevronLeft size={18} />
+              </button>
+              <span className="text-xs tabular-nums">{nav.index + 1}/{nav.total}</span>
+              <button type="button" onClick={goNext} disabled={!nav.next} aria-label="Fiche suivante"
+                className="p-1 rounded-md hover:text-white hover:bg-neutral-800 disabled:opacity-30 transition-colors">
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          )}
           <Link href="/portefeuille" className="inline-flex items-center gap-1.5 text-xs text-teal-400 hover:text-teal-300 transition-colors">
             <LayoutGrid size={14} /> Portefeuille
           </Link>
