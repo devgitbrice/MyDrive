@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Paperclip, Search, X } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 
 export interface QTx {
+  id: string;
   date: string;
   label: string;
   amount: number;
@@ -30,6 +32,11 @@ const OP_LABEL: Record<string, string> = { card: "Carte", transfer: "Virement", 
 const cat = (t: QTx) => t.category || NON_CLASSE;
 const subcat = (t: QTx) => t.subcategory || NON_CLASSE;
 
+// Corrections manuelles de catégories, stockées dans un doc du drive
+// (les données Qonto venant du Sheet sont en lecture seule).
+type Override = { category?: string; subcategory?: string };
+const OVERRIDES_TITLE = "Qonto — Catégories corrigées";
+
 export default function QontoView({ txs, error }: { txs: QTx[] | null; error: string | null }) {
   const [year, setYear] = useState<string>("");
   const [query, setQuery] = useState("");
@@ -42,13 +49,59 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
   const [offSubcats, setOffSubcats] = useState<Set<string>>(new Set());
   const [offMois, setOffMois] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<number | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, Override>>({});
+  const [ovDocId, setOvDocId] = useState<string | null>(null);
 
-  const years = useMemo(() => (txs ? [...new Set(txs.map((t) => t.date.slice(0, 4)))].sort() : []), [txs]);
+  // Charge les corrections de catégories depuis le drive.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data } = await supabase
+        .from("MyDrive")
+        .select("id, content")
+        .eq("title", OVERRIDES_TITLE)
+        .is("deleted_at", null)
+        .limit(1)
+        .maybeSingle();
+      if (!alive || !data) return;
+      setOvDocId(data.id);
+      try { setOverrides(JSON.parse(data.content || "{}")); } catch { /* contenu illisible : on repart de zéro */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Applique les corrections par-dessus les données du Sheet.
+  const data = useMemo(() => {
+    if (!txs) return null;
+    return txs.map((t) => {
+      const o = overrides[t.id];
+      return o ? { ...t, category: o.category ?? t.category, subcategory: o.subcategory ?? t.subcategory } : t;
+    });
+  }, [txs, overrides]);
+
+  const setCategory = useCallback(async (tx: QTx, field: "category" | "subcategory", value: string) => {
+    const cleaned = value === NON_CLASSE ? "" : value;
+    const next = { ...overrides, [tx.id]: { ...overrides[tx.id], [field]: cleaned } };
+    setOverrides(next);
+    const content = JSON.stringify(next);
+    if (ovDocId) {
+      await supabase.from("MyDrive").update({ content }).eq("id", ovDocId);
+    } else {
+      const { data: doc } = await supabase
+        .from("MyDrive")
+        .insert({ title: OVERRIDES_TITLE, content, observation: "Corrections manuelles des catégories Qonto (page Finances).", image_path: "", image_url: "", doc_type: "doc", parent_id: null })
+        .select("id")
+        .single();
+      if (doc) setOvDocId(doc.id);
+    }
+  }, [overrides, ovDocId]);
+
+  const years = useMemo(() => (data ? [...new Set(data.map((t) => t.date.slice(0, 4)))].sort() : []), [data]);
   // Tant que l'utilisateur n'a rien choisi, l'année la plus récente est active.
   const activeYear = year || years[years.length - 1] || "";
 
   // Transactions de l'année (refusées exclues des totaux, affichées barrées)
-  const ofYear = useMemo(() => (txs || []).filter((t) => t.date.startsWith(activeYear)), [txs, activeYear]);
+  const ofYear = useMemo(() => (data || []).filter((t) => t.date.startsWith(activeYear)), [data, activeYear]);
   const ok = useMemo(() => ofYear.filter((t) => t.status !== "declined"), [ofYear]);
 
   const totals = useMemo(() => {
@@ -71,6 +124,9 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
 
   const cats = useMemo(() => facet(ofYear, cat), [ofYear]);
   const subcats = useMemo(() => facet(ofYear, subcat), [ofYear]);
+  // Choix proposés dans la pop-up : toutes les catégories connues, toutes années.
+  const allCats = useMemo(() => (data ? [...new Set(data.map(cat))].sort((a, b) => a.localeCompare(b, "fr")) : []), [data]);
+  const allSubcats = useMemo(() => (data ? [...new Set(data.map(subcat))].sort((a, b) => a.localeCompare(b, "fr")) : []), [data]);
   // Mois présents dans l'année affichée ("01".."12"), ordre calendaire.
   const moisDispo = useMemo(
     () => [...new Set(ofYear.map((t) => t.date.slice(5, 7)))].sort(),
@@ -110,7 +166,7 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
   }, [selected, move]);
 
   if (error) return <p className="text-sm text-red-400">{error}</p>;
-  if (!txs) return <p className="text-neutral-500 text-sm">Chargement des données Qonto…</p>;
+  if (!data) return <p className="text-neutral-500 text-sm">Chargement des données Qonto…</p>;
 
   const current = selected !== null ? filtered[selected] : null;
 
@@ -287,8 +343,14 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
               <Row k="Statut" v={STATUT_LABEL[current.status] || current.status} />
               <Row k="Type" v={OP_LABEL[current.operationType] || current.operationType} />
               <Row k="Compte" v={current.account} />
-              <Row k="Catégorie générale" v={cat(current)} />
-              <Row k="Catégorie comptable" v={subcat(current)} />
+            </dl>
+            <div className="mt-3 space-y-3">
+              <CatPicker label="Catégorie générale" value={cat(current)} options={allCats}
+                onPick={(v) => setCategory(current, "category", v)} />
+              <CatPicker label="Catégorie comptable" value={subcat(current)} options={allSubcats}
+                onPick={(v) => setCategory(current, "subcategory", v)} />
+            </div>
+            <dl className="space-y-2 text-sm mt-3">
               {current.reference && <Row k="Référence" v={current.reference} />}
               {current.note && <Row k="Note interne" v={current.note} />}
               {current.attachments && <Row k="Justificatifs" v={current.attachments} />}
@@ -351,6 +413,36 @@ function FilterGroup({ title, items, off, onToggle, onSetAll }: {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function CatPicker({ label, value, options, onPick }: {
+  label: string;
+  value: string;
+  options: string[];
+  onPick: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="text-sm">
+      <div className="flex gap-3 items-baseline">
+        <span className="w-40 shrink-0 text-neutral-500">{label}</span>
+        <button onClick={() => setOpen((o) => !o)}
+          className="min-w-0 text-left px-2 py-0.5 rounded-md border border-blue-500/50 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20">
+          {value} <span className="text-blue-400/60 text-xs">{open ? "▴" : "▾"}</span>
+        </button>
+      </div>
+      {open && (
+        <div className="mt-2 ml-[10.75rem] flex flex-wrap gap-1 max-h-36 overflow-y-auto pr-1">
+          {options.map((o) => (
+            <button key={o} onClick={() => { onPick(o); setOpen(false); }}
+              className={`text-xs px-2 py-1 rounded-md border transition-colors ${o === value ? "border-blue-500/50 bg-blue-500/10 text-blue-200" : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:text-white hover:border-neutral-500"}`}>
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

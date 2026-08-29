@@ -13,6 +13,7 @@ export async function GET() {
     const txs = rows
       .filter((r) => /^\d{4}-/.test(r["emitted at"] || "") && !isInternalTransfer(r))
       .map((r) => ({
+        id: r["slug transaction"] || "",
         date: r["emitted at"],
         label: (r["counterparty name"] || "(sans nom)").trim(),
         amount: parseFloat(r.amount || "0") || 0,
