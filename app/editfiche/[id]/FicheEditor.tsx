@@ -255,8 +255,11 @@ export default function FicheEditor({ item }: { item: any }) {
     }
   }, [fiche, title, update]);
 
+  // WAV silencieux (0 échantillon) pour débloquer l'audio dans le geste utilisateur iOS.
+  const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+
   const stopAudio = useCallback(() => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    if (audioRef.current) { audioRef.current.pause(); }
     setSpeaking(false);
   }, []);
 
@@ -264,6 +267,12 @@ export default function FicheEditor({ item }: { item: any }) {
     if (speaking) { stopAudio(); return; }
     const text = fiche.analyse.text;
     if (!text) return;
+
+    // 1) Débloque l'élément audio MAINTENANT (dans le geste de clic) — indispensable sur iOS.
+    let audio = audioRef.current;
+    if (!audio) { audio = new Audio(); audioRef.current = audio; }
+    try { audio.src = SILENT; audio.play().catch(() => {}); } catch {}
+
     setSpeaking(true);
     try {
       const res = await authFetch("/api/tts-openai", {
@@ -274,8 +283,8 @@ export default function FicheEditor({ item }: { item: any }) {
       if (!res.ok) throw new Error("TTS indisponible");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audioRef.current = audio;
+      // 2) L'élément est déjà débloqué → le vrai audio peut jouer.
+      audio.src = url;
       audio.onended = () => { setSpeaking(false); URL.revokeObjectURL(url); };
       audio.onerror = () => { setSpeaking(false); URL.revokeObjectURL(url); };
       await audio.play();
