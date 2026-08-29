@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ArrowLeft, Share2, BookOpen } from "lucide-react";
 import DocExportMenu from "@/components/DocExportMenu";
 import TtsButton from "@/components/TtsButton";
+import SummaryAudioButton from "@/components/SummaryAudioButton";
 import { useThemeStore } from "@/store/themeStore";
 import ItemCodeBadge from "@/features/mydrive/components/ItemCodeBadge";
 
@@ -76,6 +77,7 @@ export default function DocHeader({
           </button>
         )}
 
+        {getContent && <SummaryAudioButton getContent={getContent} title={title} />}
         {getContent && <TtsButton getContent={getContent} title={title} />}
 
         {id && (
