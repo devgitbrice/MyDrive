@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import FinancesView from "./FinancesView";
+import FinancesTabs from "./FinancesTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export default function FinancesPage() {
         <h1 className="text-xl font-semibold text-emerald-400">Finances</h1>
       </header>
       <div className="max-w-3xl mx-auto">
-        <FinancesView />
+        <FinancesTabs />
       </div>
     </main>
   );

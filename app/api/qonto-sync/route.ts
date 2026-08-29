@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { fetchQontoRows, type QontoRow as Tx } from "@/lib/qonto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,39 +8,6 @@ export const maxDuration = 60;
 // Synchronisation Qonto : lit l'export Google Sheets (CSV) et régénère les
 // documents « Qonto <année> » du dossier Finances/Qonto. Déclenchée par le
 // cron Vercel, ou manuellement via GET /api/qonto-sync.
-const SHEET_ID =
-  process.env.QONTO_SHEET_ID || "1zxnoWSHpdlEJBFA2iIV63iJ83jMrPBc_xBCF8fZA_IA";
-const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
-
-type Tx = Record<string, string>;
-
-// Parseur CSV minimal gérant les champs entre guillemets (virgules et
-// retours à la ligne inclus) — le format exact produit par Google Sheets.
-function parseCsv(text: string): Tx[] {
-  const rows: string[][] = [];
-  let field = "";
-  let row: string[] = [];
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++; }
-        else inQuotes = false;
-      } else field += c;
-    } else if (c === '"') inQuotes = true;
-    else if (c === ",") { row.push(field); field = ""; }
-    else if (c === "\n" || c === "\r") {
-      if (c === "\r" && text[i + 1] === "\n") i++;
-      row.push(field); field = "";
-      if (row.length > 1 || row[0] !== "") rows.push(row);
-      row = [];
-    } else field += c;
-  }
-  if (field !== "" || row.length) { row.push(field); rows.push(row); }
-  const header = rows.shift() || [];
-  return rows.map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] || ""])));
-}
 
 const MOIS = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
@@ -120,13 +88,12 @@ export async function GET(req: NextRequest) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   const H = { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
 
-  const csvRes = await fetch(CSV_URL, { redirect: "follow" });
-  if (!csvRes.ok) return new Response("Sheet fetch failed", { status: 502 });
-  const csvText = await csvRes.text();
-  if (csvText.trimStart().startsWith("<")) {
-    return new Response("Sheet not shared publicly", { status: 502 });
+  let txs: Tx[];
+  try {
+    txs = await fetchQontoRows();
+  } catch (e) {
+    return new Response(String(e), { status: 502 });
   }
-  const txs = parseCsv(csvText);
 
   // Dossier Finances puis dossier Qonto (créé au besoin).
   const finRes = await fetch(
