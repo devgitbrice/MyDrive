@@ -51,6 +51,30 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
   const [selected, setSelected] = useState<number | null>(null);
   const [overrides, setOverrides] = useState<Record<string, Override>>({});
   const [ovDocId, setOvDocId] = useState<string | null>(null);
+  const [rapports, setRapports] = useState<{ id: string; title: string }[]>([]);
+
+  // Liste des rapports financiers (dossier Finances/Rapports du drive).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data: folder } = await supabase
+        .from("MyDrive")
+        .select("id")
+        .eq("title", "Rapports")
+        .is("deleted_at", null)
+        .limit(1)
+        .maybeSingle();
+      if (!alive || !folder) return;
+      const { data: docs } = await supabase
+        .from("MyDrive")
+        .select("id, title, created_at")
+        .eq("parent_id", folder.id)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
+      if (alive && docs) setRapports(docs);
+    })();
+    return () => { alive = false; };
+  }, []);
 
   // Charge les corrections de catégories depuis le drive.
   useEffect(() => {
@@ -170,7 +194,8 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
   const current = selected !== null ? filtered[selected] : null;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col xl:flex-row gap-6">
+    <div className="flex-1 min-w-0 space-y-6">
       {/* Années */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg border border-neutral-700 overflow-hidden">
@@ -375,6 +400,23 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
           </div>
         </div>
       )}
+    </div>
+
+    {/* Rapports financiers, à droite des infos */}
+    <aside className="shrink-0 xl:w-56 xl:-mr-60">
+      <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">Rapports</h2>
+      {rapports.length === 0 && <p className="text-xs text-neutral-600">Aucun rapport pour le moment.</p>}
+      <ul className="space-y-1.5">
+        {rapports.map((r) => (
+          <li key={r.id}>
+            <a href={`/view/${r.id}`}
+              className="block text-sm text-teal-400 hover:text-teal-300 rounded-lg border border-neutral-800 bg-neutral-900/40 hover:border-neutral-600 px-2.5 py-2">
+              {r.title}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </aside>
     </div>
   );
 }
