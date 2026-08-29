@@ -20,6 +20,7 @@ export interface QTx {
 
 const eur = (n: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 2 }).format(n || 0);
 const MOIS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+const MOIS_COURT = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"];
 const PAGE = 50;
 const NON_CLASSE = "Non classé";
 const STATUTS: [string, string][] = [["completed", "Réalisée"], ["pending", "En cours"], ["declined", "Refusée"]];
@@ -39,6 +40,7 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
   const [offStatuts, setOffStatuts] = useState<Set<string>>(new Set());
   const [offCats, setOffCats] = useState<Set<string>>(new Set());
   const [offSubcats, setOffSubcats] = useState<Set<string>>(new Set());
+  const [offMois, setOffMois] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<number | null>(null);
 
   const years = useMemo(() => (txs ? [...new Set(txs.map((t) => t.date.slice(0, 4)))].sort() : []), [txs]);
@@ -69,17 +71,23 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
 
   const cats = useMemo(() => facet(ofYear, cat), [ofYear]);
   const subcats = useMemo(() => facet(ofYear, subcat), [ofYear]);
+  // Mois présents dans l'année affichée ("01".."12"), ordre calendaire.
+  const moisDispo = useMemo(
+    () => [...new Set(ofYear.map((t) => t.date.slice(5, 7)))].sort(),
+    [ofYear]
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return ofYear
       .filter((t) =>
+        !offMois.has(t.date.slice(5, 7)) &&
         !offSides.has(t.side) && !offStatuts.has(t.status) &&
         !offCats.has(cat(t)) && !offSubcats.has(subcat(t)) &&
         (!q || t.label.toLowerCase().includes(q) || t.category.toLowerCase().includes(q) ||
           t.reference.toLowerCase().includes(q) || t.note.toLowerCase().includes(q)))
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [ofYear, query, offSides, offStatuts, offCats, offSubcats]);
+  }, [ofYear, query, offMois, offSides, offStatuts, offCats, offSubcats]);
 
   const move = useCallback((delta: number) => {
     setSelected((s) => {
@@ -169,6 +177,26 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
       {/* Transactions : barre de filtres à gauche + liste (largeur inchangée) */}
       <section>
         <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">Transactions {activeYear}</h2>
+        {/* Sélection des mois affichés */}
+        <div className="flex flex-wrap items-center gap-1 mb-3">
+          {moisDispo.map((m) => {
+            const active = !offMois.has(m);
+            return (
+              <button key={m} onClick={() => { setOffMois(toggle(offMois, m)); setLimit(PAGE); setSelected(null); }}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors ${active ? "border-blue-500/50 bg-blue-500/10 text-blue-200" : "border-neutral-800 bg-neutral-900 text-neutral-500 hover:text-neutral-300"}`}>
+                {MOIS_COURT[parseInt(m, 10) - 1]}
+              </button>
+            );
+          })}
+          <button onClick={() => {
+              const allOff = moisDispo.every((m) => offMois.has(m));
+              setOffMois(allOff ? new Set() : new Set(moisDispo));
+              setLimit(PAGE); setSelected(null);
+            }}
+            className="ml-1 text-[10px] text-neutral-600 hover:text-neutral-300 underline underline-offset-2">
+            {moisDispo.every((m) => offMois.has(m)) ? "Tout cocher" : "Tout décocher"}
+          </button>
+        </div>
         <div className="flex flex-col xl:flex-row gap-4">
           <aside className="shrink-0 xl:w-56 xl:-ml-60 space-y-4">
             <FilterGroup title="Sens"
