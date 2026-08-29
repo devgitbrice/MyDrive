@@ -1,16 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import FinancesView from "./FinancesView";
-import QontoView from "./QontoView";
+import QontoView, { type QTx } from "./QontoView";
 
 // Onglets de la page Finances : suivi manuel (Supabase) et données Qonto
-// (export Google Sheets servi par /api/qonto).
+// (export Google Sheets servi par /api/qonto). Le chargement Qonto vit ici
+// pour alimenter à la fois la barre de fraîcheur et l'onglet Qonto.
 export default function FinancesTabs() {
   const [tab, setTab] = useState<"suivi" | "qonto">("suivi");
+  const [txs, setTxs] = useState<QTx[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/qonto");
+        const data = await res.json();
+        if (!alive) return;
+        if (!data.ok) { setError(data.error || "Erreur de chargement"); return; }
+        setTxs(data.transactions);
+        setFetchedAt(data.fetchedAt || null);
+      } catch {
+        if (alive) setError("Impossible de charger les données Qonto.");
+      }
+    })();
+    const tick = setInterval(() => setNow(Date.now()), 10_000);
+    return () => { alive = false; clearInterval(tick); };
+  }, []);
+
+  const maj = fetchedAt ? new Date(fetchedAt) : null;
+  const minutes = maj ? Math.max(0, Math.floor((now - maj.getTime()) / 60_000)) : null;
 
   return (
     <div className="space-y-5">
+      {maj && (
+        <p className="text-xs text-neutral-500">
+          Dernière mise à jour : {maj.toLocaleDateString("fr-FR")} {maj.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+          {minutes !== null && <> — il y a {minutes} min</>}
+          <span className="text-neutral-700"> | </span>
+          {new Date(now).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+        </p>
+      )}
       <div className="inline-flex rounded-lg border border-neutral-700 overflow-hidden">
         <button onClick={() => setTab("suivi")}
           className={`px-4 py-2 text-sm font-semibold transition-colors ${tab === "suivi" ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
@@ -21,7 +55,7 @@ export default function FinancesTabs() {
           Qonto
         </button>
       </div>
-      {tab === "suivi" ? <FinancesView /> : <QontoView />}
+      {tab === "suivi" ? <FinancesView /> : <QontoView txs={txs} error={error} />}
     </div>
   );
 }

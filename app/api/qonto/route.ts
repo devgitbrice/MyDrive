@@ -24,7 +24,7 @@ export async function GET() {
         note: (r["internal note"] || "").trim(),
         attachments: (r["attachment names"] || "").trim(),
       }));
-    return Response.json({ ok: true, count: txs.length, transactions: txs });
+    return Response.json({ ok: true, count: txs.length, fetchedAt: new Date().toISOString(), transactions: txs });
   } catch (e) {
     return Response.json({ ok: false, error: String(e) }, { status: 502 });
   }

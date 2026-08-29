@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Paperclip, Search } from "lucide-react";
 
-interface QTx {
+export interface QTx {
   date: string;
   label: string;
   amount: number;
@@ -20,36 +20,17 @@ const eur = (n: number) => new Intl.NumberFormat("fr-FR", { style: "currency", c
 const MOIS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 const PAGE = 50;
 
-export default function QontoView() {
-  const [txs, setTxs] = useState<QTx[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export default function QontoView({ txs, error }: { txs: QTx[] | null; error: string | null }) {
   const [year, setYear] = useState<string>("");
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(PAGE);
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/qonto");
-        const data = await res.json();
-        if (!alive) return;
-        if (!data.ok) { setError(data.error || "Erreur de chargement"); return; }
-        const list: QTx[] = data.transactions;
-        setTxs(list);
-        const years = [...new Set(list.map((t) => t.date.slice(0, 4)))].sort();
-        setYear(years[years.length - 1] || "");
-      } catch {
-        if (alive) setError("Impossible de charger les données Qonto.");
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
-
   const years = useMemo(() => (txs ? [...new Set(txs.map((t) => t.date.slice(0, 4)))].sort() : []), [txs]);
+  // Tant que l'utilisateur n'a rien choisi, l'année la plus récente est active.
+  const activeYear = year || years[years.length - 1] || "";
 
   // Transactions de l'année (refusées exclues des totaux, affichées barrées)
-  const ofYear = useMemo(() => (txs || []).filter((t) => t.date.startsWith(year)), [txs, year]);
+  const ofYear = useMemo(() => (txs || []).filter((t) => t.date.startsWith(activeYear)), [txs, activeYear]);
   const ok = useMemo(() => ofYear.filter((t) => t.status !== "declined"), [ofYear]);
 
   const totals = useMemo(() => {
@@ -90,7 +71,7 @@ export default function QontoView() {
         <div className="inline-flex rounded-lg border border-neutral-700 overflow-hidden">
           {years.map((y) => (
             <button key={y} onClick={() => { setYear(y); setLimit(PAGE); }}
-              className={`px-3 py-1.5 text-xs font-semibold transition-colors ${year === y ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
+              className={`px-3 py-1.5 text-xs font-semibold transition-colors ${activeYear === y ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
               {y}
             </button>
           ))}
@@ -109,7 +90,7 @@ export default function QontoView() {
           <div className="text-lg font-bold tabular-nums text-red-400">{eur(totals.debit)}</div>
         </div>
         <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-3">
-          <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1">Net {year}</div>
+          <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1">Net {activeYear}</div>
           <div className={`text-lg font-bold tabular-nums ${totals.net >= 0 ? "text-white" : "text-red-400"}`}>{eur(totals.net)}</div>
         </div>
       </div>
@@ -145,7 +126,7 @@ export default function QontoView() {
 
       {/* Liste des transactions */}
       <section>
-        <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">Transactions {year}</h2>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">Transactions {activeYear}</h2>
         <div className="relative mb-3">
           <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500" />
           <input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} placeholder="Rechercher une contrepartie ou une catégorie…"
