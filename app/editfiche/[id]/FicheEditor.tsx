@@ -2,8 +2,10 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { ChevronLeft, LayoutGrid } from "lucide-react";
+import { ChevronLeft, LayoutGrid, Sparkles, Volume2, Loader2, Square } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { authFetch } from "@/lib/authFetch";
+import { toast } from "@/components/Toaster";
 
 type Tri = "oui" | "non" | "so" | "";
 type Prio = "prioritaire" | "veille" | "";
@@ -40,6 +42,7 @@ interface Fiche {
     mailing: { statut: Tri; lien: string };
   };
   kpis: { ca: string; prochaineAction: string };
+  analyse: { text: string; generatedAt: number };
 }
 
 const net = (): Net => ({ statut: "", url: "", abonnes: "" });
@@ -67,6 +70,7 @@ function emptyFiche(): Fiche {
       mailing: { statut: "", lien: "" },
     },
     kpis: { ca: "", prochaineAction: "" },
+    analyse: { text: "", generatedAt: 0 },
   };
 }
 
@@ -104,10 +108,48 @@ function parseFiche(raw: string | null): Fiche {
         mailing: { ...base.commercial.mailing, ...(p.commercial?.mailing || {}) },
       },
       kpis: { ...base.kpis, ...(p.kpis || {}) },
+      analyse: { ...base.analyse, ...(p.analyse || {}) },
     };
   } catch {
     return base;
   }
+}
+
+// Convertit la fiche en texte lisible pour alimenter l'analyse LLM.
+function buildSummary(f: Fiche, projet: string): string {
+  const tri = (v: Tri) => (v === "oui" ? "oui" : v === "non" ? "non" : v === "so" ? "sans objet" : "non renseigné");
+  const bm = BM_LABELS.filter((b) => f.businessModel[b.key]).map((b) => b.label);
+  if (f.businessModel.autre) bm.push("autre : " + f.businessModel.autre);
+  const p = f.presence;
+  const net = (k: keyof Fiche["presence"], label: string) => {
+    const n = p[k] as Net;
+    return `${label} : ${tri(n.statut)}${n.abonnes ? ` (${n.abonnes} abonnés)` : ""}`;
+  };
+  const lines = [
+    `Priorité : ${f.priorite === "prioritaire" ? "prioritaire" : f.priorite === "veille" ? "en veille" : "non définie"}`,
+    `Business model : ${bm.length ? bm.join(", ") : "non défini"}${f.businessModel.principal ? ` (principal : ${BM_LABELS.find((b) => b.key === f.businessModel.principal)?.label})` : ""}`,
+    `Produits en vente avec tarif : ${tri(f.produits.statut)}`,
+    `Site web : ${tri(p.site.statut)}${p.site.url ? ` (${p.site.url})` : ""}`,
+    `App iOS : ${tri(p.appIos.statut)}`,
+    `GA4 installé : ${tri(p.ga4.statut)}`,
+    `Trafic mensuel : ${p.trafic || "non renseigné"}`,
+    net("linkedin", "LinkedIn"),
+    net("youtube", "YouTube"),
+    net("instagram", "Instagram"),
+    net("telegram", "Telegram"),
+    net("whatsapp", "Liste WhatsApp"),
+    net("newsletter", "Newsletter"),
+    `Podcast : ${tri(p.podcast.statut)}`,
+    `Pub Meta : ${tri(p.pubMeta.statut)}`,
+    `Pub Google Ads : ${tri(p.pubGoogle.statut)}`,
+    `Cibles précises établies : ${tri(f.commercial.cibles.statut)}`,
+    `Contact réseaux personnels : ${tri(f.commercial.contactPerso.statut)}`,
+    `Phoning fait : ${tri(f.commercial.phoning.statut)}`,
+    `Mailing fait : ${tri(f.commercial.mailing.statut)}`,
+    `CA / mois : ${f.kpis.ca || "non renseigné"}`,
+    `Prochaine action notée : ${f.kpis.prochaineAction || "aucune"}`,
+  ];
+  return lines.join("\n");
 }
 
 function TriState({ value, onChange }: { value: Tri; onChange: (v: Tri) => void }) {
@@ -189,6 +231,62 @@ export default function FicheEditor({ item }: { item: any }) {
   const onTitle = (v: string) => { setTitle(v); scheduleSave(v, fiche); };
   const p = fiche.presence;
 
+  // --- Analyse IA (ChatGPT) + lecture audio (TTS OpenAI) ---
+  const [generating, setGenerating] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const generateAnalyse = useCallback(async () => {
+    setGenerating(true);
+    try {
+      const summary = buildSummary(fiche, title);
+      const res = await authFetch("/api/analyze-fiche", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ summary, projet: title }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.text) throw new Error(data.error || "Analyse indisponible");
+      update((f) => ({ ...f, analyse: { text: data.text, generatedAt: Date.now() } }));
+    } catch (e: any) {
+      toast("Erreur analyse : " + (e?.message || ""));
+    } finally {
+      setGenerating(false);
+    }
+  }, [fiche, title, update]);
+
+  const stopAudio = useCallback(() => {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    setSpeaking(false);
+  }, []);
+
+  const speak = useCallback(async () => {
+    if (speaking) { stopAudio(); return; }
+    const text = fiche.analyse.text;
+    if (!text) return;
+    setSpeaking(true);
+    try {
+      const res = await authFetch("/api/tts-openai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voice: "alloy" }),
+      });
+      if (!res.ok) throw new Error("TTS indisponible");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => { setSpeaking(false); URL.revokeObjectURL(url); };
+      audio.onerror = () => { setSpeaking(false); URL.revokeObjectURL(url); };
+      await audio.play();
+    } catch (e: any) {
+      toast("Erreur lecture audio : " + (e?.message || ""));
+      setSpeaking(false);
+    }
+  }, [speaking, fiche.analyse.text, stopAudio]);
+
+  useEffect(() => () => { if (audioRef.current) audioRef.current.pause(); }, []);
+
   // --- Synthèse ---
   const counts = useMemo(() => {
     const pres = [p.site, p.appIos, p.ga4, p.linkedin, p.youtube, p.instagram, p.telegram, p.whatsapp, p.newsletter, p.podcast, p.pubMeta, p.pubGoogle];
@@ -224,6 +322,32 @@ export default function FicheEditor({ item }: { item: any }) {
 
       <input value={title} onChange={(e) => onTitle(e.target.value)} placeholder="Nom du projet"
         className="w-full bg-transparent text-2xl font-semibold text-white outline-none mb-4 border-b border-transparent focus:border-neutral-700" />
+
+      {/* Analyse IA + lecteur audio */}
+      <div className="rounded-xl border border-teal-500/30 bg-teal-500/5 p-4 mb-4">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-teal-400">
+            <Sparkles size={14} /> Analyse IA
+          </span>
+          <div className="flex items-center gap-2">
+            {fiche.analyse.text && (
+              <button type="button" onClick={speak}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border border-teal-500/40 text-teal-300 hover:bg-teal-500/10 transition-colors">
+                {speaking ? <><Square size={12} /> Stop</> : <><Volume2 size={12} /> Écouter</>}
+              </button>
+            )}
+            <button type="button" onClick={generateAnalyse} disabled={generating}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border border-teal-500/40 text-teal-300 hover:bg-teal-500/10 transition-colors disabled:opacity-50">
+              {generating ? <><Loader2 size={12} className="animate-spin" /> Analyse…</> : (fiche.analyse.text ? "Régénérer" : "Générer l'analyse")}
+            </button>
+          </div>
+        </div>
+        {fiche.analyse.text ? (
+          <p className="text-sm text-neutral-200 leading-relaxed">{fiche.analyse.text}</p>
+        ) : (
+          <p className="text-xs text-neutral-500">Génère une analyse d'environ 100 mots à partir des infos de la fiche (ChatGPT), avec lecture audio.</p>
+        )}
+      </div>
 
       {/* Bandeau synthèse + priorité */}
       <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-3 mb-6">
