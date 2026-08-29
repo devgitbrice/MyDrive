@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Settings, LayoutGrid } from "lucide-react";
+import { Settings, LayoutGrid, Wallet } from "lucide-react";
 import { fetchMyDrive, fetchAllTags } from "@/features/mydrive/lib/fetchMyDrive";
 import LiveDrive from "@/features/mydrive/components/LiveDrive";
 import AddMenu from "@/components/AddMenu";
@@ -46,6 +46,13 @@ export default async function MyDrivePage() {
             className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
           >
             <LayoutGrid size={20} />
+          </Link>
+          <Link
+            href="/finances"
+            title="Finances"
+            className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
+          >
+            <Wallet size={20} />
           </Link>
           <ThemeToggle />
           <LogoutButton />
