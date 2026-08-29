@@ -36,6 +36,14 @@ export function parseCsv(text: string): QontoRow[] {
   return rows.map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] || ""])));
 }
 
+// Virement entre les propres comptes Qonto (Compte principal ↔ Coffre) :
+// un mouvement interne, pas une vraie recette ni une vraie dépense.
+export function isInternalTransfer(r: QontoRow): boolean {
+  if (r["operation type"] !== "transfer") return false;
+  const cp = (r["counterparty name"] || "").trim().toLowerCase();
+  return cp === "compte principal" || cp === "coffre";
+}
+
 export async function fetchQontoRows(): Promise<QontoRow[]> {
   const res = await fetch(QONTO_CSV_URL, { redirect: "follow" });
   if (!res.ok) throw new Error(`Sheet fetch failed (${res.status})`);

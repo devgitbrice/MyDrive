@@ -1,4 +1,4 @@
-import { fetchQontoRows } from "@/lib/qonto";
+import { fetchQontoRows, isInternalTransfer } from "@/lib/qonto";
 
 export const runtime = "nodejs";
 // Le Sheet change peu : on sert une version en cache 5 minutes.
@@ -8,8 +8,10 @@ export const revalidate = 300;
 export async function GET() {
   try {
     const rows = await fetchQontoRows();
+    // Les virements internes (Compte principal ↔ Coffre) sont écartés :
+    // ils ne représentent ni recette ni dépense réelle.
     const txs = rows
-      .filter((r) => /^\d{4}-/.test(r["emitted at"] || ""))
+      .filter((r) => /^\d{4}-/.test(r["emitted at"] || "") && !isInternalTransfer(r))
       .map((r) => ({
         date: r["emitted at"].slice(0, 10),
         label: (r["counterparty name"] || "(sans nom)").trim(),

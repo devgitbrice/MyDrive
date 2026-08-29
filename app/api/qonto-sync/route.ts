@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { fetchQontoRows, type QontoRow as Tx } from "@/lib/qonto";
+import { fetchQontoRows, isInternalTransfer, type QontoRow as Tx } from "@/lib/qonto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,8 +24,10 @@ const th = (a: string) => `style="text-align:${a};padding:10px 14px;font-weight:
 const td = (a: string) => `style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:${a};font-variant-numeric:tabular-nums"`;
 
 function buildYearDoc(year: string, txs: Tx[]): string {
-  const ok = txs.filter((r) => r.status !== "declined");
-  const declined = txs.length - ok.length;
+  const noDeclined = txs.filter((r) => r.status !== "declined");
+  const declined = txs.length - noDeclined.length;
+  const ok = noDeclined.filter((r) => !isInternalTransfer(r));
+  const internes = noDeclined.length - ok.length;
   let credit = 0;
   let debit = 0;
   const months = new Map<number, [number, number, number]>();
@@ -50,7 +52,7 @@ function buildYearDoc(year: string, txs: Tx[]): string {
   const color = net >= 0 ? "#4ade80" : "#f87171";
   const h: string[] = [];
   h.push(`<h1 style="font-size:32px;font-weight:700;margin:0 0 8px 0;letter-spacing:-0.01em">Qonto ${year}</h1>`);
-  h.push(`<p style="font-size:13px;opacity:0.7;line-height:1.6;margin:8px 0 20px 0">Compte Nouvo Media — ${ok.length} transactions (${declined} refusées exclues des totaux). Synchronisé depuis Google Sheets le ${new Date().toLocaleDateString("fr-FR")}.</p>`);
+  h.push(`<p style="font-size:13px;opacity:0.7;line-height:1.6;margin:8px 0 20px 0">Compte Nouvo Media — ${ok.length} transactions (${declined} refusées et ${internes} virements internes Compte principal ↔ Coffre exclus des totaux). Synchronisé depuis Google Sheets le ${new Date().toLocaleDateString("fr-FR")}.</p>`);
   h.push(`<h2>Synthèse</h2><ul><li>Encaissements — <strong>${eur(credit)}</strong></li><li>Dépenses — <strong>${eur(debit)}</strong></li><li>Net — <strong style="color:${color}">${eur(net)}</strong></li></ul>`);
   h.push(`<h2>Détail mensuel</h2><table ${TABLE}><thead><tr><th ${th("left")}>Mois</th><th ${th("right")}>Encaissements</th><th ${th("right")}>Dépenses</th><th ${th("right")}>Net</th><th ${th("right")}>Tx</th></tr></thead><tbody>`);
   for (const m of [...months.keys()].sort((a, b) => a - b)) {
