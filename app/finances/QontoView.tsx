@@ -173,16 +173,16 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
           <aside className="shrink-0 xl:w-56 xl:-ml-60 space-y-4">
             <FilterGroup title="Sens"
               items={[["credit", "Encaissements"], ["debit", "Dépenses"]]}
-              off={offSides} onToggle={(v) => setOffSides(toggle(offSides, v))} />
+              off={offSides} onToggle={(v) => setOffSides(toggle(offSides, v))} onSetAll={setOffSides} />
             <FilterGroup title="Opération"
               items={STATUTS}
-              off={offStatuts} onToggle={(v) => setOffStatuts(toggle(offStatuts, v))} />
+              off={offStatuts} onToggle={(v) => setOffStatuts(toggle(offStatuts, v))} onSetAll={setOffStatuts} />
             <FilterGroup title="Catégories générales"
               items={cats.map(([k, n]) => [k, `${k} (${n})`])}
-              off={offCats} onToggle={(v) => setOffCats(toggle(offCats, v))} />
+              off={offCats} onToggle={(v) => setOffCats(toggle(offCats, v))} onSetAll={setOffCats} />
             <FilterGroup title="Catégories comptables"
               items={subcats.map(([k, n]) => [k, `${k} (${n})`])}
-              off={offSubcats} onToggle={(v) => setOffSubcats(toggle(offSubcats, v))} />
+              off={offSubcats} onToggle={(v) => setOffSubcats(toggle(offSubcats, v))} onSetAll={setOffSubcats} />
           </aside>
 
           <div className="flex-1 min-w-0">
@@ -295,15 +295,23 @@ function toggle(s: Set<string>, v: string): Set<string> {
   return next;
 }
 
-function FilterGroup({ title, items, off, onToggle }: {
+function FilterGroup({ title, items, off, onToggle, onSetAll }: {
   title: string;
   items: [string, string][];
   off: Set<string>;
   onToggle: (v: string) => void;
+  onSetAll: (off: Set<string>) => void;
 }) {
+  const allOff = items.length > 0 && items.every(([v]) => off.has(v));
   return (
     <div>
-      <h3 className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-1.5">{title}</h3>
+      <div className="flex items-baseline justify-between gap-2 mb-1.5">
+        <h3 className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{title}</h3>
+        <button onClick={() => onSetAll(allOff ? new Set() : new Set(items.map(([v]) => v)))}
+          className="text-[10px] text-neutral-600 hover:text-neutral-300 underline underline-offset-2 shrink-0">
+          {allOff ? "Tout cocher" : "Tout décocher"}
+        </button>
+      </div>
       <div className="flex flex-wrap xl:flex-col gap-1">
         {items.map(([v, label]) => {
           const active = !off.has(v);
