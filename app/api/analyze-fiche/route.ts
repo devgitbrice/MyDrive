@@ -32,7 +32,10 @@ export async function POST(req: NextRequest) {
           {
             role: "system",
             content:
-              "Tu es un conseiller business francophone. À partir de la fiche d'un projet, écris une analyse synthétique d'environ 100 mots (ni titre, ni liste, un seul paragraphe fluide) : où en est le projet, ses atouts, ses manques, et la priorité concrète à traiter. Ton direct et actionnable, en français.",
+              "Tu es un conseiller business francophone. À partir de la fiche d'un projet, écris une analyse d'environ 100 mots, en français, en un seul paragraphe fluide (ni titre, ni liste). " +
+              "Elle DOIT commencer exactement par : « Concernant le projet [nom du projet], il est en mesure de générer du revenu car … » OU « Concernant le projet [nom du projet], il n'est pas en mesure de générer du revenu car … » — choisis « est » ou « n'est pas » selon la situation réelle décrite dans la fiche (produits en vente et tarifs, audience/abonnés, site fonctionnel, actions commerciales). " +
+              "Justifie le « car » avec les faits concrets de la fiche. " +
+              "Termine OBLIGATOIREMENT par une phrase commençant par « Il faut absolument » suivie d'un plan d'attaque concret et priorisé (2 à 3 actions). Ton direct et actionnable.",
           },
           {
             role: "user",
