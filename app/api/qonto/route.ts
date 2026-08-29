@@ -19,6 +19,8 @@ export async function GET() {
         side: r.side === "credit" ? "credit" : "debit",
         status: r.status,
         category: r.category || "",
+        subcategory: r.subcategory || "",
+        operationType: r["operation type"] || "",
         account: r["account name"] || "",
         reference: (r.reference || "").trim(),
         note: (r["internal note"] || "").trim(),
