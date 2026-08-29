@@ -150,11 +150,16 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
   // Choix proposés dans la pop-up : toutes les catégories connues, toutes années.
   const allCats = useMemo(() => (data ? [...new Set(data.map(cat))].sort((a, b) => a.localeCompare(b, "fr")) : []), [data]);
   const allSubcats = useMemo(() => (data ? [...new Set(data.map(subcat))].sort((a, b) => a.localeCompare(b, "fr")) : []), [data]);
-  // Mois présents dans l'année affichée ("01".."12"), ordre calendaire.
-  const moisDispo = useMemo(
-    () => [...new Set(ofYear.map((t) => t.date.slice(5, 7)))].sort(),
-    [ofYear]
-  );
+  // Mois présents dans l'année affichée ("01".."12") avec leur nombre
+  // d'opérations, ordre calendaire.
+  const moisDispo = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of ofYear) {
+      const k = t.date.slice(5, 7);
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [ofYear]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -259,22 +264,23 @@ export default function QontoView({ txs, error }: { txs: QTx[] | null; error: st
         <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">Transactions {activeYear}</h2>
         {/* Sélection des mois affichés */}
         <div className="flex flex-wrap items-center gap-1 mb-3">
-          {moisDispo.map((m) => {
+          {moisDispo.map(([m, n]) => {
             const active = !offMois.has(m);
             return (
               <button key={m} onClick={() => { setOffMois(toggle(offMois, m)); setLimit(PAGE); setSelected(null); }}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors ${active ? "border-blue-500/50 bg-blue-500/10 text-blue-200" : "border-neutral-800 bg-neutral-900 text-neutral-500 hover:text-neutral-300"}`}>
-                {MOIS_COURT[parseInt(m, 10) - 1]}
+                className={`flex flex-col items-center px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors ${active ? "border-blue-500/50 bg-blue-500/10 text-blue-200" : "border-neutral-800 bg-neutral-900 text-neutral-500 hover:text-neutral-300"}`}>
+                <span>{MOIS_COURT[parseInt(m, 10) - 1]}</span>
+                <span className={`text-[10px] font-normal tabular-nums ${active ? "text-blue-300/60" : "text-neutral-600"}`}>{n} op.</span>
               </button>
             );
           })}
           <button onClick={() => {
-              const allOff = moisDispo.every((m) => offMois.has(m));
-              setOffMois(allOff ? new Set() : new Set(moisDispo));
+              const allOff = moisDispo.every(([m]) => offMois.has(m));
+              setOffMois(allOff ? new Set() : new Set(moisDispo.map(([m]) => m)));
               setLimit(PAGE); setSelected(null);
             }}
             className="ml-1 text-[10px] text-neutral-600 hover:text-neutral-300 underline underline-offset-2">
-            {moisDispo.every((m) => offMois.has(m)) ? "Tout cocher" : "Tout décocher"}
+            {moisDispo.every(([m]) => offMois.has(m)) ? "Tout cocher" : "Tout décocher"}
           </button>
         </div>
         <div className="flex flex-col xl:flex-row gap-4">
