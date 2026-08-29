@@ -36,12 +36,16 @@ export function parseCsv(text: string): QontoRow[] {
   return rows.map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] || ""])));
 }
 
-// Virement entre les propres comptes Qonto (Compte principal ↔ Coffre) :
-// un mouvement interne, pas une vraie recette ni une vraie dépense.
+// Mouvement entre les propres comptes Qonto (Compte principal ↔ Coffre) :
+// ni une vraie recette ni une vraie dépense. Côté départ, un « transfer »
+// vers l'autre compte ; côté arrivée, un « income » dont la contrepartie
+// est le titulaire lui-même (NOUVO MEDIA).
 export function isInternalTransfer(r: QontoRow): boolean {
-  if (r["operation type"] !== "transfer") return false;
   const cp = (r["counterparty name"] || "").trim().toLowerCase();
-  return cp === "compte principal" || cp === "coffre";
+  const op = r["operation type"];
+  if (op === "transfer") return cp === "compte principal" || cp === "coffre";
+  if (op === "income") return cp === "nouvo media";
+  return false;
 }
 
 export async function fetchQontoRows(): Promise<QontoRow[]> {
