@@ -37,8 +37,9 @@ const subcat = (t: QTx) => t.subcategory || NON_CLASSE;
 type Override = { category?: string; subcategory?: string; contextNote?: string; project?: string };
 const OVERRIDES_TITLE = "Qonto — Catégories corrigées";
 
-export default function QontoView({ txs, error, subtitle = "compte Nouvo Media", balance = null }: { txs: QTx[] | null; error: string | null; subtitle?: string; balance?: number | null }) {
+export default function QontoView({ txs, error, subtitle = "compte Nouvo Media", balance = null, accounts = [] }: { txs: QTx[] | null; error: string | null; subtitle?: string; balance?: number | null; accounts?: { name: string; balance: number }[] }) {
   const [year, setYear] = useState<string>("");
+  const [compte, setCompte] = useState<string>("");
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(PAGE);
   // Filtres : on stocke ce qui est DÉSACTIVÉ, pour que tout soit actif par
@@ -123,8 +124,15 @@ export default function QontoView({ txs, error, subtitle = "compte Nouvo Media",
   // Tant que l'utilisateur n'a rien choisi, l'année la plus récente est active.
   const activeYear = year || years[years.length - 1] || "";
 
-  // Transactions de l'année (refusées exclues des totaux, affichées barrées)
-  const ofYear = useMemo(() => (data || []).filter((t) => t.date.startsWith(activeYear)), [data, activeYear]);
+  // Comptes présents dans les données (Compte principal, Coffre…).
+  const comptes = useMemo(() => (data ? [...new Set(data.map((t) => t.account).filter(Boolean))].sort() : []), [data]);
+
+  // Transactions de l'année et du compte choisi (refusées exclues des
+  // totaux, affichées barrées)
+  const ofYear = useMemo(
+    () => (data || []).filter((t) => t.date.startsWith(activeYear) && (!compte || t.account === compte)),
+    [data, activeYear, compte]
+  );
   const ok = useMemo(() => ofYear.filter((t) => t.status !== "declined"), [ofYear]);
 
   const totals = useMemo(() => {
@@ -211,6 +219,16 @@ export default function QontoView({ txs, error, subtitle = "compte Nouvo Media",
             </button>
           ))}
         </div>
+        {comptes.length > 1 && (
+          <div className="inline-flex rounded-lg border border-neutral-700 overflow-hidden">
+            {["", ...comptes].map((c) => (
+              <button key={c || "tous"} onClick={() => { setCompte(c); setLimit(PAGE); setSelected(null); }}
+                className={`px-3 py-1.5 text-xs font-semibold transition-colors ${compte === c ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
+                {c || "Tous les comptes"}
+              </button>
+            ))}
+          </div>
+        )}
         <span className="text-xs text-neutral-500">{ok.length} transactions · {subtitle}</span>
       </div>
 
@@ -218,8 +236,12 @@ export default function QontoView({ txs, error, subtitle = "compte Nouvo Media",
       <div className={`grid grid-cols-2 gap-3 ${balance !== null ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
         {balance !== null && (
           <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-3">
-            <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1">Solde actuel (tous comptes)</div>
-            <div className="text-lg font-bold tabular-nums text-white">{eur(balance)}</div>
+            <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+              {compte ? `Solde ${compte}` : "Solde actuel (tous comptes)"}
+            </div>
+            <div className="text-lg font-bold tabular-nums text-white">
+              {eur(compte ? (accounts.find((a) => a.name === compte)?.balance ?? 0) : balance)}
+            </div>
           </div>
         )}
         <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-3">

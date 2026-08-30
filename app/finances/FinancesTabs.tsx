@@ -20,6 +20,8 @@ export default function FinancesTabs() {
   const [nmError, setNmError] = useState<string | null>(null);
   const [nmBalance, setNmBalance] = useState<number | null>(null);
   const [gennnBalance, setGennnBalance] = useState<number | null>(null);
+  const [nmAccounts, setNmAccounts] = useState<{ name: string; balance: number }[]>([]);
+  const [gennnAccounts, setGennnAccounts] = useState<{ name: string; balance: number }[]>([]);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -45,6 +47,7 @@ export default function FinancesTabs() {
         if (!data.ok) { setGennnError(data.error || "Erreur de chargement"); return; }
         setGennnTxs(data.transactions);
         if (typeof data.balance === "number") setGennnBalance(data.balance);
+        if (Array.isArray(data.accounts)) setGennnAccounts(data.accounts);
       } catch {
         if (alive) setGennnError("Impossible de charger les données Qonto Gennn.");
       }
@@ -57,6 +60,7 @@ export default function FinancesTabs() {
         if (!data.ok) { setNmError(data.error || "Erreur de chargement"); return; }
         setNmTxs(data.transactions);
         if (typeof data.balance === "number") setNmBalance(data.balance);
+        if (Array.isArray(data.accounts)) setNmAccounts(data.accounts);
       } catch {
         if (alive) setNmError("Impossible de charger les données Qonto Nouvo Media (new).");
       }
@@ -129,8 +133,8 @@ export default function FinancesTabs() {
       </div>
       {tab === "suivi" ? <FinancesView bunqNet={bunqNet} bunqError={bunqError} />
         : tab === "qonto" ? <QontoView txs={txs} error={error} />
-        : tab === "nm" ? <QontoView txs={nmTxs} error={nmError} subtitle="compte Nouvo Media (API directe)" balance={nmBalance} />
-        : tab === "gennn" ? <QontoView txs={gennnTxs} error={gennnError} subtitle="compte Gennn" balance={gennnBalance} />
+        : tab === "nm" ? <QontoView txs={nmTxs} error={nmError} subtitle="compte Nouvo Media (API directe)" balance={nmBalance} accounts={nmAccounts} />
+        : tab === "gennn" ? <QontoView txs={gennnTxs} error={gennnError} subtitle="compte Gennn" balance={gennnBalance} accounts={gennnAccounts} />
         : tab === "perso" ? <QontoView txs={bunqTxs} error={bunqError} subtitle="compte bunq perso" />
         : <ShopView />}
     </div>
