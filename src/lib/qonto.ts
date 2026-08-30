@@ -56,6 +56,79 @@ export function isInternalTransfer(r: QontoRow, ownName = "nouvo media"): boolea
   return false;
 }
 
+// Transaction au format compact servi aux onglets Qonto.
+export interface CompactTx {
+  id: string;
+  date: string;
+  label: string;
+  amount: number;
+  side: string;
+  status: string;
+  category: string;
+  subcategory: string;
+  operationType: string;
+  account: string;
+  reference: string;
+  note: string;
+  attachments: string;
+}
+
+interface QontoApiTx {
+  transaction_id: string;
+  emitted_at: string;
+  label?: string;
+  amount: number;
+  side: string;
+  status: string;
+  operation_type?: string;
+  reference?: string;
+  note?: string;
+  cashflow_category?: { name?: string } | null;
+  cashflow_subcategory?: { name?: string } | null;
+}
+
+// Lecture directe (temps réel) de l'API Qonto avec une clé
+// login:secret (Réglages Qonto → Intégrations → Clé API).
+export async function fetchQontoApiTxs(login: string, secret: string): Promise<CompactTx[]> {
+  const H = { Authorization: `${login}:${secret}` };
+  const orgRes = await fetch("https://thirdparty.qonto.com/v2/organization", { headers: H });
+  if (!orgRes.ok) throw new Error(`Qonto API organization → ${orgRes.status}`);
+  const org = await orgRes.json();
+  const accounts: { id: string; name?: string }[] = org.organization?.bank_accounts || [];
+
+  const all: CompactTx[] = [];
+  for (const acc of accounts) {
+    let page: number | null = 1;
+    while (page) {
+      const res: Response = await fetch(
+        `https://thirdparty.qonto.com/v2/transactions?bank_account_id=${acc.id}&per_page=100&current_page=${page}&status[]=completed&status[]=pending&status[]=declined`,
+        { headers: H }
+      );
+      if (!res.ok) throw new Error(`Qonto API transactions → ${res.status}`);
+      const j: { transactions?: QontoApiTx[]; meta?: { next_page?: number | null } } = await res.json();
+      for (const t of (j.transactions || []) as QontoApiTx[]) {
+        all.push({
+          id: t.transaction_id,
+          date: t.emitted_at,
+          label: (t.label || "(sans nom)").trim(),
+          amount: Math.abs(t.amount || 0),
+          side: t.side === "credit" ? "credit" : "debit",
+          status: t.status,
+          category: t.cashflow_category?.name || "",
+          subcategory: t.cashflow_subcategory?.name || "",
+          operationType: t.operation_type || "",
+          account: acc.name || "Compte principal",
+          reference: (t.reference || "").trim(),
+          note: (t.note || "").trim(),
+          attachments: "",
+        });
+      }
+      page = j.meta?.next_page ?? null;
+    }
+  }
+  return all;
+}
+
 export async function fetchQontoRows(sheetId = QONTO_SHEET_ID): Promise<QontoRow[]> {
   const res = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`, { redirect: "follow" });
   if (!res.ok) throw new Error(`Sheet fetch failed (${res.status})`);

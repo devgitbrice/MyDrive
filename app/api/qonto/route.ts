@@ -1,5 +1,22 @@
 import { NextRequest } from "next/server";
-import { fetchQontoRows, isInternalTransfer, QONTO_SOURCES } from "@/lib/qonto";
+import { fetchQontoApiTxs, fetchQontoRows, isInternalTransfer, QONTO_SOURCES } from "@/lib/qonto";
+
+// Repli Gennn : copie des transactions synchronisée via le MCP Qonto,
+// stockée dans le drive tant que la clé API directe n'est pas configurée.
+const GENNN_DOC_TITLE = "Qonto Gennn — Transactions (sync MCP)";
+
+async function gennnFromDrive() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const res = await fetch(
+    `${url}/rest/v1/MyDrive?select=content&title=eq.${encodeURIComponent(GENNN_DOC_TITLE)}&deleted_at=is.null&limit=1`,
+    { headers: { apikey: key, Authorization: `Bearer ${key}` } }
+  );
+  const rows = await res.json();
+  if (!rows.length) throw new Error("Copie Gennn introuvable dans le drive");
+  const data = JSON.parse(rows[0].content || "{}");
+  return { txs: data.transactions || [], fetchedAt: data.updatedAt || null };
+}
 
 export const runtime = "nodejs";
 // Le Sheet change peu : on sert une version en cache 5 minutes.
@@ -9,10 +26,25 @@ export const revalidate = 300;
 // ?src=nouvo (défaut) ou ?src=gennn.
 export async function GET(req: NextRequest) {
   try {
-    const src = QONTO_SOURCES[req.nextUrl.searchParams.get("src") || "nouvo"];
+    const srcKey = req.nextUrl.searchParams.get("src") || "nouvo";
+    const src = QONTO_SOURCES[srcKey];
     if (!src) return Response.json({ ok: false, error: "Source inconnue" }, { status: 400 });
+
+    if (srcKey === "gennn") {
+      // Temps réel via l'API Qonto si la clé est configurée, sinon la
+      // copie MCP du drive.
+      const login = process.env.QONTO_GENNN_LOGIN;
+      const secret = process.env.QONTO_GENNN_SECRET;
+      if (login && secret) {
+        const txs = await fetchQontoApiTxs(login, secret);
+        return Response.json({ ok: true, count: txs.length, fetchedAt: new Date().toISOString(), live: true, transactions: txs });
+      }
+      const { txs, fetchedAt } = await gennnFromDrive();
+      return Response.json({ ok: true, count: txs.length, fetchedAt, live: false, transactions: txs });
+    }
+
     if (!src.sheetId) {
-      return Response.json({ ok: false, error: "Export Google Sheets non configuré pour ce compte (variable QONTO_GENNN_SHEET_ID)." }, { status: 502 });
+      return Response.json({ ok: false, error: "Export Google Sheets non configuré pour ce compte." }, { status: 502 });
     }
     const rows = await fetchQontoRows(src.sheetId);
     // Les virements internes (Compte principal ↔ Coffre) sont écartés :
