@@ -19,7 +19,9 @@ async function uid(): Promise<string | null> {
   try { const { data } = await supabase.auth.getUser(); return data.user?.id ?? null; } catch { return null; }
 }
 
-export default function FinancesView({ bunqNet, bunqError }: { bunqNet?: number | null; bunqError?: string | null } = {}) {
+type Liquidite = { label: string; value: number | null; error?: string | null };
+
+export default function FinancesView({ liquidites = [] }: { liquidites?: Liquidite[] } = {}) {
   const [txs, setTxs] = useState<Tx[]>([]);
   const [echs, setEchs] = useState<Ech[]>([]);
   const [scope, setScope] = useState<"tout" | Scope>("tout");
@@ -102,10 +104,32 @@ export default function FinancesView({ bunqNet, bunqError }: { bunqNet?: number 
         <Card label="Dépenses" value={eur(totals.dep)} color="text-red-400" />
         <Card label="Solde" value={eur(totals.solde)} color={totals.solde >= 0 ? "text-white" : "text-red-400"} />
         <Card label="À provisionner (échéances)" value={eur(echDue)} color="text-amber-400" />
-        <Card label={`Net ${new Date().getFullYear()} Personnel (banque bunq)`}
-          value={bunqNet != null ? eur(bunqNet) : bunqError ? "indisponible" : "…"}
-          color={bunqNet != null ? (bunqNet >= 0 ? "text-green-400" : "text-red-400") : "text-neutral-500"} />
       </div>
+
+      {/* Liquidités : soldes réels des comptes, en direct */}
+      {liquidites.length > 0 && (
+        <section>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">Liquidités</h2>
+          <ul className="rounded-xl border border-neutral-800 bg-neutral-900/50 divide-y divide-neutral-800">
+            {liquidites.map((l) => (
+              <li key={l.label} className="flex items-baseline justify-between gap-3 px-3 py-2.5">
+                <span className="text-sm text-neutral-300">{l.label}</span>
+                <span className={`text-sm font-bold tabular-nums ${l.value != null ? "text-white" : "text-neutral-500"}`}>
+                  {l.value != null ? eur(l.value) : l.error ? "indisponible" : "…"}
+                </span>
+              </li>
+            ))}
+            {liquidites.some((l) => l.value != null) && (
+              <li className="flex items-baseline justify-between gap-3 px-3 py-2.5">
+                <span className="text-sm font-semibold text-neutral-400">Total liquidités</span>
+                <span className="text-sm font-bold tabular-nums text-green-400">
+                  {eur(liquidites.reduce((s, l) => s + (l.value || 0), 0))}
+                </span>
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
 
       {/* Échéances */}
       <section>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import FinancesView from "./FinancesView";
 import QontoView, { type QTx } from "./QontoView";
 import ShopView from "./ShopView";
@@ -14,6 +14,7 @@ export default function FinancesTabs() {
   const [error, setError] = useState<string | null>(null);
   const [bunqTxs, setBunqTxs] = useState<QTx[] | null>(null);
   const [bunqError, setBunqError] = useState<string | null>(null);
+  const [bunqBalance, setBunqBalance] = useState<number | null>(null);
   const [gennnTxs, setGennnTxs] = useState<QTx[] | null>(null);
   const [gennnError, setGennnError] = useState<string | null>(null);
   const [nmTxs, setNmTxs] = useState<QTx[] | null>(null);
@@ -72,6 +73,7 @@ export default function FinancesTabs() {
         if (!alive) return;
         if (!data.ok) { setBunqError(data.error || "Erreur de chargement bunq"); return; }
         setBunqTxs(data.transactions);
+        if (typeof data.balance === "number") setBunqBalance(data.balance);
       } catch {
         if (alive) setBunqError("Impossible de charger les données bunq.");
       }
@@ -79,15 +81,6 @@ export default function FinancesTabs() {
     const tick = setInterval(() => setNow(Date.now()), 10_000);
     return () => { alive = false; clearInterval(tick); };
   }, []);
-
-  // Net bunq de l'année en cours, affiché sur l'onglet Suivi.
-  const bunqNet = useMemo(() => {
-    if (!bunqTxs) return null;
-    const year = String(new Date().getFullYear());
-    return bunqTxs
-      .filter((t) => t.date.startsWith(year))
-      .reduce((s, t) => s + (t.side === "credit" ? t.amount : -t.amount), 0);
-  }, [bunqTxs]);
 
   const maj = fetchedAt ? new Date(fetchedAt) : null;
   const minutes = maj ? Math.max(0, Math.floor((now - maj.getTime()) / 60_000)) : null;
@@ -131,7 +124,14 @@ export default function FinancesTabs() {
           Shop
         </button>
       </div>
-      {tab === "suivi" ? <FinancesView bunqNet={bunqNet} bunqError={bunqError} />
+      {tab === "suivi" ? (
+        <FinancesView
+          liquidites={[
+            { label: "Solde actuel compte Nouvo Media", value: nmBalance, error: nmError },
+            { label: "Solde actuel compte Gennn", value: gennnBalance, error: gennnError },
+            { label: "Solde actuel Perso (banque bunq)", value: bunqBalance, error: bunqError },
+          ]} />
+      )
         : tab === "qonto" ? <QontoView txs={txs} error={error} />
         : tab === "nm" ? <QontoView txs={nmTxs} error={nmError} subtitle="compte Nouvo Media (API directe)" balance={nmBalance} accounts={nmAccounts} />
         : tab === "gennn" ? <QontoView txs={gennnTxs} error={gennnError} subtitle="compte Gennn" balance={gennnBalance} accounts={gennnAccounts} />

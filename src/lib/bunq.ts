@@ -85,8 +85,9 @@ async function getContext(): Promise<BunqContext> {
   return ctx;
 }
 
-// Liste tous les paiements de tous les comptes (pagination older_id).
-export async function fetchBunqPayments(): Promise<BunqPayment[]> {
+// Liste tous les paiements de tous les comptes (pagination older_id),
+// et remonte le solde total des comptes.
+export async function fetchBunqPayments(): Promise<{ payments: BunqPayment[]; balance: number }> {
   let c = await getContext();
   const get = async (path: string) => {
     try {
@@ -103,10 +104,14 @@ export async function fetchBunqPayments(): Promise<BunqPayment[]> {
   };
 
   const accountsRes = await get(`/user/${c.userId}/monetary-account?count=25`);
-  const accountIds: number[] = (accountsRes.Response as BunqObject[])
+  const accountObjs = (accountsRes.Response as BunqObject[])
     .map((entry) => Object.values(entry)[0])
-    .filter((a): a is BunqObject[string] => Boolean(a && a.id))
-    .map((a) => a.id as number);
+    .filter((a): a is BunqObject[string] => Boolean(a && a.id));
+  const accountIds: number[] = accountObjs.map((a) => a.id as number);
+  const balance = accountObjs.reduce((s, a) => {
+    const b = (a as { balance?: { value?: string } }).balance;
+    return s + (parseFloat(b?.value || "0") || 0);
+  }, 0);
 
   const all: BunqPayment[] = [];
   for (const accId of accountIds) {
@@ -120,5 +125,5 @@ export async function fetchBunqPayments(): Promise<BunqPayment[]> {
       path = older.replace("/v1", "");
     }
   }
-  return all;
+  return { payments: all, balance };
 }

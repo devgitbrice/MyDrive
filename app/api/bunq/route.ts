@@ -9,7 +9,7 @@ export const revalidate = 300;
 // /api/qonto pour réutiliser la même vue).
 export async function GET() {
   try {
-    const payments = await fetchBunqPayments();
+    const { payments, balance } = await fetchBunqPayments();
     const txs = payments.map((p) => {
       const value = parseFloat(p.amount?.value || "0") || 0;
       return {
@@ -28,7 +28,7 @@ export async function GET() {
         attachments: "",
       };
     });
-    return Response.json({ ok: true, count: txs.length, fetchedAt: new Date().toISOString(), transactions: txs });
+    return Response.json({ ok: true, count: txs.length, fetchedAt: new Date().toISOString(), balance, transactions: txs });
   } catch (e) {
     return Response.json({ ok: false, error: String(e) }, { status: 502 });
   }
