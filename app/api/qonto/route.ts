@@ -1,19 +1,31 @@
 import { NextRequest } from "next/server";
 import { fetchQontoApiTxs, fetchQontoRows, isInternalTransfer, QONTO_SOURCES } from "@/lib/qonto";
 
-// Repli Gennn : copie des transactions synchronisée via le MCP Qonto,
-// stockée dans le drive tant que la clé API directe n'est pas configurée.
-const GENNN_DOC_TITLE = "Qonto Gennn — Transactions (sync MCP)";
+// Comptes branchés en direct sur l'API Qonto (clé login:secret dans les
+// variables d'environnement), avec repli sur une copie synchronisée via
+// le MCP Qonto et stockée dans le drive.
+const LIVE_SOURCES: Record<string, { loginEnv: string; secretEnv: string; docTitle: string }> = {
+  gennn: {
+    loginEnv: "QONTO_GENNN_LOGIN",
+    secretEnv: "QONTO_GENNN_SECRET",
+    docTitle: "Qonto Gennn — Transactions (sync MCP)",
+  },
+  nm: {
+    loginEnv: "QONTO_NM_LOGIN",
+    secretEnv: "QONTO_NM_SECRET",
+    docTitle: "Qonto Nouvo Media — Transactions (sync MCP)",
+  },
+};
 
-async function gennnFromDrive() {
+async function txsFromDrive(docTitle: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   const res = await fetch(
-    `${url}/rest/v1/MyDrive?select=content&title=eq.${encodeURIComponent(GENNN_DOC_TITLE)}&deleted_at=is.null&limit=1`,
+    `${url}/rest/v1/MyDrive?select=content&title=eq.${encodeURIComponent(docTitle)}&deleted_at=is.null&limit=1`,
     { headers: { apikey: key, Authorization: `Bearer ${key}` } }
   );
   const rows = await res.json();
-  if (!rows.length) throw new Error("Copie Gennn introuvable dans le drive");
+  if (!rows.length) throw new Error(`Ni clé API configurée, ni copie MCP « ${docTitle} » dans le drive`);
   const data = JSON.parse(rows[0].content || "{}");
   return { txs: data.transactions || [], fetchedAt: data.updatedAt || null };
 }
@@ -27,22 +39,22 @@ export const revalidate = 300;
 export async function GET(req: NextRequest) {
   try {
     const srcKey = req.nextUrl.searchParams.get("src") || "nouvo";
-    const src = QONTO_SOURCES[srcKey];
-    if (!src) return Response.json({ ok: false, error: "Source inconnue" }, { status: 400 });
-
-    if (srcKey === "gennn") {
+    const live = LIVE_SOURCES[srcKey];
+    if (live) {
       // Temps réel via l'API Qonto si la clé est configurée, sinon la
       // copie MCP du drive.
-      const login = process.env.QONTO_GENNN_LOGIN;
-      const secret = process.env.QONTO_GENNN_SECRET;
+      const login = process.env[live.loginEnv];
+      const secret = process.env[live.secretEnv];
       if (login && secret) {
         const txs = await fetchQontoApiTxs(login, secret);
         return Response.json({ ok: true, count: txs.length, fetchedAt: new Date().toISOString(), live: true, transactions: txs });
       }
-      const { txs, fetchedAt } = await gennnFromDrive();
+      const { txs, fetchedAt } = await txsFromDrive(live.docTitle);
       return Response.json({ ok: true, count: txs.length, fetchedAt, live: false, transactions: txs });
     }
 
+    const src = QONTO_SOURCES[srcKey];
+    if (!src) return Response.json({ ok: false, error: "Source inconnue" }, { status: 400 });
     if (!src.sheetId) {
       return Response.json({ ok: false, error: "Export Google Sheets non configuré pour ce compte." }, { status: 502 });
     }
