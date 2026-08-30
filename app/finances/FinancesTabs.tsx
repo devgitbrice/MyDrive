@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from "react";
 import FinancesView from "./FinancesView";
+import FormationView from "./FormationView";
 import QontoView, { type QTx } from "./QontoView";
 import ShopView from "./ShopView";
+import { supabase } from "@/lib/supabaseClient";
 
 // Onglets de la page Finances : suivi manuel (Supabase) et données Qonto
 // (export Google Sheets servi par /api/qonto). Le chargement Qonto vit ici
 // pour alimenter à la fois la barre de fraîcheur et l'onglet Qonto.
 export default function FinancesTabs() {
-  const [tab, setTab] = useState<"suivi" | "qonto" | "nm" | "gennn" | "perso" | "shop">("suivi");
+  const [tab, setTab] = useState<"suivi" | "qonto" | "nm" | "gennn" | "perso" | "shop" | "formation">("suivi");
   const [txs, setTxs] = useState<QTx[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [bunqTxs, setBunqTxs] = useState<QTx[] | null>(null);
@@ -25,6 +27,8 @@ export default function FinancesTabs() {
   const [gennnAccounts, setGennnAccounts] = useState<{ name: string; balance: number }[]>([]);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [shopVendu, setShopVendu] = useState<number | null>(null);
+  const [formationImminent, setFormationImminent] = useState<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -78,6 +82,28 @@ export default function FinancesTabs() {
         if (alive) setBunqError("Impossible de charger les données bunq.");
       }
     })();
+    // Montants Shop (articles vendus, en attente de paiement) et
+    // Formation (paiement imminent), stockés dans le drive.
+    (async () => {
+      const { data } = await supabase
+        .from("MyDrive")
+        .select("title, content")
+        .in("title", ["Shop — Articles", "Formation — Suivi"])
+        .is("deleted_at", null);
+      if (!alive || !data) return;
+      for (const row of data) {
+        try {
+          const parsed = JSON.parse(row.content || "null");
+          if (row.title === "Shop — Articles" && Array.isArray(parsed)) {
+            setShopVendu(parsed.filter((i) => i.status === "vendu").reduce((s, i) => s + (Number(i.price) || 0), 0));
+          }
+          if (row.title === "Formation — Suivi" && parsed && typeof parsed.imminent === "number") {
+            setFormationImminent(parsed.imminent);
+          }
+        } catch { /* contenu illisible : on ignore */ }
+      }
+      if (alive) setShopVendu((v) => v ?? 0);
+    })();
     const tick = setInterval(() => setNow(Date.now()), 10_000);
     return () => { alive = false; clearInterval(tick); };
   }, []);
@@ -123,6 +149,10 @@ export default function FinancesTabs() {
           className={`px-4 py-2 text-sm font-semibold transition-colors ${tab === "shop" ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
           Shop
         </button>
+        <button onClick={() => setTab("formation")}
+          className={`px-4 py-2 text-sm font-semibold transition-colors ${tab === "formation" ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
+          Formation
+        </button>
       </div>
       {tab === "suivi" ? (
         <FinancesView
@@ -130,12 +160,17 @@ export default function FinancesTabs() {
             { label: "Solde actuel compte Nouvo Media", value: nmBalance, error: nmError },
             { label: "Solde actuel compte Gennn", value: gennnBalance, error: gennnError },
             { label: "Solde actuel Perso (banque bunq)", value: bunqBalance, error: bunqError },
+          ]}
+          attendus={[
+            { label: "Shop — en attente de paiement (vendus)", value: shopVendu },
+            { label: "Formation — paiement imminent attendu", value: formationImminent },
           ]} />
       )
         : tab === "qonto" ? <QontoView txs={txs} error={error} />
         : tab === "nm" ? <QontoView txs={nmTxs} error={nmError} subtitle="compte Nouvo Media (API directe)" balance={nmBalance} accounts={nmAccounts} />
         : tab === "gennn" ? <QontoView txs={gennnTxs} error={gennnError} subtitle="compte Gennn" balance={gennnBalance} accounts={gennnAccounts} />
         : tab === "perso" ? <QontoView txs={bunqTxs} error={bunqError} subtitle="compte bunq perso" />
+        : tab === "formation" ? <FormationView imminent={formationImminent} onSaved={setFormationImminent} />
         : <ShopView />}
     </div>
   );

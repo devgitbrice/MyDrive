@@ -21,7 +21,7 @@ async function uid(): Promise<string | null> {
 
 type Liquidite = { label: string; value: number | null; error?: string | null };
 
-export default function FinancesView({ liquidites = [] }: { liquidites?: Liquidite[] } = {}) {
+export default function FinancesView({ liquidites = [], attendus = [] }: { liquidites?: Liquidite[]; attendus?: Liquidite[] } = {}) {
   const [txs, setTxs] = useState<Tx[]>([]);
   const [echs, setEchs] = useState<Ech[]>([]);
   const [scope, setScope] = useState<"tout" | Scope>("tout");
@@ -124,6 +124,31 @@ export default function FinancesView({ liquidites = [] }: { liquidites?: Liquidi
                 <span className="text-sm font-semibold text-neutral-400">Total liquidités</span>
                 <span className="text-sm font-bold tabular-nums text-green-400">
                   {eur(liquidites.reduce((s, l) => s + (l.value || 0), 0))}
+                </span>
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
+
+      {/* Entrées attendues : ventes Shop en attente, paiements formation imminents */}
+      {attendus.length > 0 && (
+        <section>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">Entrées attendues</h2>
+          <ul className="rounded-xl border border-neutral-800 bg-neutral-900/50 divide-y divide-neutral-800">
+            {attendus.map((l) => (
+              <li key={l.label} className="flex items-baseline justify-between gap-3 px-3 py-2.5">
+                <span className="text-sm text-neutral-300">{l.label}</span>
+                <span className={`text-sm font-bold tabular-nums ${l.value != null ? "text-blue-300" : "text-neutral-500"}`}>
+                  {l.value != null ? eur(l.value) : "—"}
+                </span>
+              </li>
+            ))}
+            {attendus.some((l) => l.value != null) && (
+              <li className="flex items-baseline justify-between gap-3 px-3 py-2.5">
+                <span className="text-sm font-semibold text-neutral-400">Total attendu</span>
+                <span className="text-sm font-bold tabular-nums text-blue-300">
+                  {eur(attendus.reduce((s, l) => s + (l.value || 0), 0))}
                 </span>
               </li>
             )}
