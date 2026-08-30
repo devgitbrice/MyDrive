@@ -74,8 +74,9 @@ export default function FinancesTabs() {
           Suivi
         </button>
         <button onClick={() => setTab("qonto")}
-          className={`px-4 py-2 text-sm font-semibold transition-colors ${tab === "qonto" ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
-          Qonto
+          className={`px-4 py-2 text-sm font-semibold transition-colors flex flex-col items-center leading-tight ${tab === "qonto" ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
+          <span>Qonto</span>
+          <span className={`text-[10px] font-normal ${tab === "qonto" ? "text-neutral-300" : "text-neutral-500"}`}>Nouvo Media</span>
         </button>
         <button onClick={() => setTab("perso")}
           className={`px-4 py-2 text-sm font-semibold transition-colors ${tab === "perso" ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
