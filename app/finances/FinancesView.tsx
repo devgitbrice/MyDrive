@@ -21,7 +21,7 @@ async function uid(): Promise<string | null> {
 
 type Liquidite = { label: string; value: number | null; error?: string | null };
 
-export default function FinancesView({ liquidites = [], attendus = [] }: { liquidites?: Liquidite[]; attendus?: Liquidite[] } = {}) {
+export default function FinancesView({ liquidites = [], attendus = [], dettes }: { liquidites?: Liquidite[]; attendus?: Liquidite[]; dettes?: { pro: number | null; perso: number | null } } = {}) {
   const [txs, setTxs] = useState<Tx[]>([]);
   const [echs, setEchs] = useState<Ech[]>([]);
   const [scope, setScope] = useState<"tout" | Scope>("tout");
@@ -152,6 +152,31 @@ export default function FinancesView({ liquidites = [], attendus = [] }: { liqui
                 </span>
               </li>
             )}
+          </ul>
+        </section>
+      )}
+
+      {/* Dettes : totaux cliquables vers la page de gestion */}
+      {dettes && (
+        <section>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">Dettes</h2>
+          <ul className="rounded-xl border border-neutral-800 bg-neutral-900/50 divide-y divide-neutral-800">
+            <li>
+              <a href="/finances/dettes" className="flex items-baseline justify-between gap-3 px-3 py-2.5 hover:bg-neutral-800/50 rounded-t-xl">
+                <span className="text-sm text-teal-400 hover:text-teal-300">Total Dette Pro →</span>
+                <span className={`text-sm font-bold tabular-nums ${dettes.pro != null ? "text-red-400" : "text-neutral-500"}`}>
+                  {dettes.pro != null ? eur(dettes.pro) : "…"}
+                </span>
+              </a>
+            </li>
+            <li>
+              <a href="/finances/dettes" className="flex items-baseline justify-between gap-3 px-3 py-2.5 hover:bg-neutral-800/50 rounded-b-xl">
+                <span className="text-sm text-teal-400 hover:text-teal-300">Total Dette Perso →</span>
+                <span className={`text-sm font-bold tabular-nums ${dettes.perso != null ? "text-red-400" : "text-neutral-500"}`}>
+                  {dettes.perso != null ? eur(dettes.perso) : "…"}
+                </span>
+              </a>
+            </li>
           </ul>
         </section>
       )}

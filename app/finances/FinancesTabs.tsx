@@ -29,6 +29,8 @@ export default function FinancesTabs() {
   const [now, setNow] = useState(() => Date.now());
   const [shopVendu, setShopVendu] = useState<number | null>(null);
   const [formationImminent, setFormationImminent] = useState<number | null>(null);
+  const [dettesPro, setDettesPro] = useState<number | null>(null);
+  const [dettesPerso, setDettesPerso] = useState<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -88,7 +90,7 @@ export default function FinancesTabs() {
       const { data } = await supabase
         .from("MyDrive")
         .select("title, content")
-        .in("title", ["Shop — Articles", "Formation — Suivi"])
+        .in("title", ["Shop — Articles", "Formation — Suivi", "Dettes — Liste"])
         .is("deleted_at", null);
       if (!alive || !data) return;
       for (const row of data) {
@@ -100,9 +102,18 @@ export default function FinancesTabs() {
           if (row.title === "Formation — Suivi" && parsed && typeof parsed.imminent === "number") {
             setFormationImminent(parsed.imminent);
           }
+          if (row.title === "Dettes — Liste" && Array.isArray(parsed)) {
+            const actives = parsed.filter((d) => !d.soldee);
+            setDettesPro(actives.filter((d) => d.scope === "pro").reduce((s, d) => s + (Number(d.amount) || 0), 0));
+            setDettesPerso(actives.filter((d) => d.scope === "perso").reduce((s, d) => s + (Number(d.amount) || 0), 0));
+          }
         } catch { /* contenu illisible : on ignore */ }
       }
-      if (alive) setShopVendu((v) => v ?? 0);
+      if (alive) {
+        setShopVendu((v) => v ?? 0);
+        setDettesPro((v) => v ?? 0);
+        setDettesPerso((v) => v ?? 0);
+      }
     })();
     const tick = setInterval(() => setNow(Date.now()), 10_000);
     return () => { alive = false; clearInterval(tick); };
@@ -164,7 +175,8 @@ export default function FinancesTabs() {
           attendus={[
             { label: "Shop — en attente de paiement (vendus)", value: shopVendu },
             { label: "Formation — paiement imminent attendu", value: formationImminent },
-          ]} />
+          ]}
+          dettes={{ pro: dettesPro, perso: dettesPerso }} />
       )
         : tab === "qonto" ? <QontoView txs={txs} error={error} />
         : tab === "nm" ? <QontoView txs={nmTxs} error={nmError} subtitle="compte Nouvo Media (API directe)" balance={nmBalance} accounts={nmAccounts} />
