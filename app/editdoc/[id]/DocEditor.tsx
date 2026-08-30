@@ -8,6 +8,7 @@ import type { Tag } from "@/features/mydrive/types";
 import DocHeader from "@/features/doc/components/DocHeader";
 import DocRibbon from "@/features/doc/components/DocRibbon";
 import BlockManager from "@/features/doc/components/BlockManager";
+import BookReader from "@/features/doc/components/BookReader";
 import FileSearchModal, { getEditUrl, type SearchResult } from "@/components/FileSearchModal";
 import { useThemeStore } from "@/store/themeStore";
 import { supabase } from "@/lib/supabaseClient";
@@ -33,6 +34,7 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
   const [mobileTagsOpen, setMobileTagsOpen] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
+  const [showBook, setShowBook] = useState(false);
   // Toast « mis à jour » quand une modification externe arrive (#3)
   const [externalUpdate, setExternalUpdate] = useState(false);
   const externalToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -206,13 +208,16 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
         </div>
       )}
       <div className={chromeClass}>
-        <DocHeader id={initialData.id} backHref={backHref} title={title} observation={observation} status={status} onTitleChange={handleTitleChange} onObservationChange={handleObservationChange} getContent={() => contentRef.current} />
+        <DocHeader id={initialData.id} backHref={backHref} title={title} observation={observation} status={status} onTitleChange={handleTitleChange} onObservationChange={handleObservationChange} getContent={() => contentRef.current} onOpenBook={() => setShowBook(true)} />
         <DocRibbon tocOpen={tocOpen} setTocOpen={setTocOpen} />
       </div>
 
       {/* key={contentKey} force le re-mount du BlockManager quand un changement Realtime arrive */}
       <BlockManager key={contentKey} initialHtml={contentSnapshot} tocOpen={tocOpen} onChange={handleContentChange} chromeVisible={chromeVisible} docTitle={title} />
 
+      {showBook && (
+        <BookReader html={contentRef.current} title={title} onClose={() => setShowBook(false)} />
+      )}
     </div>
   );
 }

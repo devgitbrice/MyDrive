@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, Share2 } from "lucide-react";
+import { ArrowLeft, Share2, BookOpen } from "lucide-react";
 import DocExportMenu from "@/components/DocExportMenu";
 import TtsButton from "@/components/TtsButton";
+import SummaryAudioButton from "@/components/SummaryAudioButton";
 import { useThemeStore } from "@/store/themeStore";
 import ItemCodeBadge from "@/features/mydrive/components/ItemCodeBadge";
 
@@ -16,6 +17,7 @@ interface DocHeaderProps {
   onTitleChange: (val: string) => void;
   onObservationChange: (val: string) => void;
   getContent?: () => string;
+  onOpenBook?: () => void;
 }
 
 export default function DocHeader({
@@ -27,6 +29,7 @@ export default function DocHeader({
   onTitleChange,
   onObservationChange,
   getContent,
+  onOpenBook,
 }: DocHeaderProps) {
   const light = useThemeStore((s) => s.theme) === "light";
   const [shareCopied, setShareCopied] = useState(false);
@@ -64,6 +67,17 @@ export default function DocHeader({
           className={`flex-1 bg-transparent text-xl font-bold outline-none ${light ? "text-neutral-900 placeholder-neutral-400" : "text-white placeholder-neutral-600"}`}
         />
 
+        {onOpenBook && (
+          <button
+            onClick={onOpenBook}
+            title="Mode lecture (Book)"
+            className={`w-9 h-9 flex items-center justify-center rounded-full border transition-colors shrink-0 ${light ? "bg-neutral-200 border-neutral-300 text-neutral-600 hover:bg-neutral-300" : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"}`}
+          >
+            <BookOpen size={16} />
+          </button>
+        )}
+
+        {getContent && <SummaryAudioButton getContent={getContent} title={title} />}
         {getContent && <TtsButton getContent={getContent} title={title} />}
 
         {id && (

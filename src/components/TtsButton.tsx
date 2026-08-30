@@ -11,6 +11,9 @@ interface Props {
 
 const MAX_CHUNK_CHARS = 3500;
 
+// WAV silencieux pour débloquer l'audio dans le geste de clic (iOS).
+const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+
 function htmlToPlainText(html: string): string {
   if (typeof document === "undefined") return "";
   const tmp = document.createElement("div");
@@ -88,12 +91,12 @@ export default function TtsButton({ getContent, title }: Props) {
   const cancelledRef = useRef(false);
 
   const cleanup = useCallback(() => {
+    // On garde l'élément <audio> vivant (débloqué par le geste iOS) pour le réutiliser.
     if (audioRef.current) {
       audioRef.current.onended = null;
       audioRef.current.ontimeupdate = null;
       audioRef.current.onerror = null;
       audioRef.current.pause();
-      audioRef.current = null;
     }
     for (const u of objectUrlsRef.current) URL.revokeObjectURL(u);
     objectUrlsRef.current = [];
@@ -125,8 +128,10 @@ export default function TtsButton({ getContent, title }: Props) {
       if (cancelledRef.current) return;
       const url = URL.createObjectURL(blob);
       objectUrlsRef.current.push(url);
-      const audio = new Audio(url);
+      // Réutilise l'élément déjà débloqué dans le geste (iOS) plutôt qu'un new Audio.
+      const audio = audioRef.current ?? new Audio();
       audioRef.current = audio;
+      audio.src = url;
       audio.ontimeupdate = () => {
         if (!audio.duration || isNaN(audio.duration)) return;
         const local = audio.currentTime / audio.duration;
@@ -158,6 +163,8 @@ export default function TtsButton({ getContent, title }: Props) {
     if (!text) return;
     stopAll();
     cancelledRef.current = false;
+    // Débloque l'audio MAINTENANT (dans le geste de clic) pour iOS.
+    { let el = audioRef.current; if (!el) { el = new Audio(); audioRef.current = el; } try { el.src = SILENT; el.play().catch(() => {}); } catch {} }
     chunksRef.current = chunkText(text);
     chunkIdxRef.current = 0;
     setState("loading");
