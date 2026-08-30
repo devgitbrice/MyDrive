@@ -9,10 +9,15 @@ export default function BookReader({
   html,
   title,
   onClose,
+  onNextDoc,
+  nextTitle,
 }: {
   html: string;
   title: string;
   onClose: () => void;
+  /** Appelé quand on avance depuis la dernière page : ouvre le doc suivant en mode livre. */
+  onNextDoc?: () => void;
+  nextTitle?: string;
 }) {
   const [page, setPage] = useState(0);
   const [pages, setPages] = useState(1);
@@ -63,8 +68,10 @@ export default function BookReader({
   }, [measure, countPages]);
 
   const go = useCallback((dir: number) => {
+    // Dernière page + on avance → enchaîne sur le document suivant en mode livre.
+    if (dir > 0 && page >= pages - 1 && onNextDoc) { onNextDoc(); return; }
     setPage((p) => Math.min(Math.max(p + dir, 0), pages - 1));
-  }, [pages]);
+  }, [page, pages, onNextDoc]);
 
   // Clavier
   useEffect(() => {
@@ -141,8 +148,13 @@ export default function BookReader({
       {/* Barre bas : navigation */}
       <div className={`flex items-center justify-between px-4 py-3 border-t ${border} shrink-0`}>
         <button onClick={() => go(-1)} disabled={page <= 0} className={`p-2 rounded-lg ${hover} disabled:opacity-30`}><ChevronLeft size={22} /></button>
-        <span className={`text-sm tabular-nums ${muted}`}>{page + 1} / {pages}</span>
-        <button onClick={() => go(1)} disabled={page >= pages - 1} className={`p-2 rounded-lg ${hover} disabled:opacity-30`}><ChevronRight size={22} /></button>
+        <span className={`text-sm tabular-nums ${muted}`}>
+          {page + 1} / {pages}
+          {page >= pages - 1 && onNextDoc && nextTitle && (
+            <span className="ml-2 not-italic">→ <em>{nextTitle}</em></span>
+          )}
+        </span>
+        <button onClick={() => go(1)} disabled={page >= pages - 1 && !onNextDoc} className={`p-2 rounded-lg ${hover} disabled:opacity-30`}><ChevronRight size={22} /></button>
       </div>
     </div>
   );

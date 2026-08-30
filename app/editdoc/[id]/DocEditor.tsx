@@ -21,9 +21,11 @@ interface DocEditorProps {
   prevHref?: string | null;
   nextHref?: string | null;
   backHref?: string;
+  /** Prochain document texte du dossier (lecture continue en mode livre). */
+  nextBookDoc?: { id: string; title: string } | null;
 }
 
-export default function DocEditor({ allTags: initialAllTags, initialData, prevHref, nextHref, backHref }: DocEditorProps) {
+export default function DocEditor({ allTags: initialAllTags, initialData, prevHref, nextHref, backHref, nextBookDoc }: DocEditorProps) {
   const router = useRouter();
   const [title, setTitle] = useState(initialData.title);
   const [observation, setObservation] = useState(initialData.observation);
@@ -35,6 +37,13 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
   const [mobileTagsOpen, setMobileTagsOpen] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
   const [showBook, setShowBook] = useState(false);
+
+  // Lecture continue : arrivé via « ?book=1 », on ouvre directement le mode livre.
+  useEffect(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get("book") === "1") setShowBook(true);
+    } catch {}
+  }, []);
   // Toast « mis à jour » quand une modification externe arrive (#3)
   const [externalUpdate, setExternalUpdate] = useState(false);
   const externalToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -216,7 +225,13 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
       <BlockManager key={contentKey} initialHtml={contentSnapshot} tocOpen={tocOpen} onChange={handleContentChange} chromeVisible={chromeVisible} docTitle={title} />
 
       {showBook && (
-        <BookReader html={contentRef.current} title={title} onClose={() => setShowBook(false)} />
+        <BookReader
+          html={contentRef.current}
+          title={title}
+          onClose={() => setShowBook(false)}
+          nextTitle={nextBookDoc?.title}
+          onNextDoc={nextBookDoc ? () => router.push(`/editdoc/${nextBookDoc.id}?book=1`) : undefined}
+        />
       )}
     </div>
   );

@@ -44,6 +44,8 @@ export default async function EditDocPage({
   // Prev / next sibling in the same folder, sorted by title (numeric-aware, asc)
   let prevHref: string | null = null;
   let nextHref: string | null = null;
+  // Prochain document texte du dossier, pour la lecture continue en mode livre
+  let nextBookDoc: { id: string; title: string } | null = null;
   {
     const q = supabase
       .from("MyDrive")
@@ -65,6 +67,11 @@ export default async function EditDocPage({
         const n = sorted[idx + 1];
         nextHref = editUrlFor(n.id, n.doc_type);
       }
+      // Premier doc texte APRÈS le courant (saute images, tables, etc.)
+      if (idx >= 0) {
+        const n = sorted.slice(idx + 1).find((s) => s.doc_type === "doc");
+        if (n) nextBookDoc = { id: n.id, title: n.title || "Document suivant" };
+      }
     }
   }
 
@@ -81,6 +88,7 @@ export default async function EditDocPage({
         }}
         prevHref={prevHref}
         nextHref={nextHref}
+        nextBookDoc={nextBookDoc}
         backHref={item.parent_id ? `/mydrive?folder=${item.parent_id}` : "/mydrive?folder=__unfiled__"}
       />
     </main>
