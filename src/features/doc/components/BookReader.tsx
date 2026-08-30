@@ -11,6 +11,9 @@ export default function BookReader({
   onClose,
   onNextDoc,
   nextTitle,
+  siblings,
+  currentId,
+  onOpenDoc,
 }: {
   html: string;
   title: string;
@@ -18,6 +21,10 @@ export default function BookReader({
   /** Appelé quand on avance depuis la dernière page : ouvre le doc suivant en mode livre. */
   onNextDoc?: () => void;
   nextTitle?: string;
+  /** Documents du même dossier (page « Sommaire » en fin de lecture). */
+  siblings?: { id: string; title: string }[];
+  currentId?: string;
+  onOpenDoc?: (id: string) => void;
 }) {
   const [page, setPage] = useState(0);
   const [pages, setPages] = useState(1);
@@ -45,7 +52,8 @@ export default function BookReader({
     if (!c || !viewW) return;
     const total = Math.max(1, Math.round(c.scrollWidth / (viewW + GAP)));
     setPages(total);
-    setPage((p) => Math.min(p, total - 1));
+    // total = dernière page de contenu ; total (index) reste permis pour le Sommaire.
+    setPage((p) => Math.min(p, total));
   }, [viewW]);
 
   const stride = viewW + GAP;
@@ -67,11 +75,25 @@ export default function BookReader({
     return () => window.removeEventListener("resize", onResize);
   }, [measure, countPages]);
 
+  // Page « Sommaire » virtuelle après la dernière page de contenu.
+  const hasIndex = !!(siblings && siblings.length > 0 && onOpenDoc);
+  const onIndex = hasIndex && page >= pages;
+
   const go = useCallback((dir: number) => {
-    // Dernière page + on avance → enchaîne sur le document suivant en mode livre.
-    if (dir > 0 && page >= pages - 1 && onNextDoc) { onNextDoc(); return; }
-    setPage((p) => Math.min(Math.max(p + dir, 0), pages - 1));
-  }, [page, pages, onNextDoc]);
+    if (dir > 0) {
+      if (page < pages - 1) { setPage(page + 1); return; }
+      // Dernière page de contenu → page Sommaire (si dispo), sinon doc suivant.
+      if (page === pages - 1) {
+        if (hasIndex) { setPage(pages); return; }
+        if (onNextDoc) { onNextDoc(); return; }
+        return;
+      }
+      // Depuis le Sommaire, avancer encore → document suivant.
+      if (onNextDoc) onNextDoc();
+      return;
+    }
+    setPage((p) => Math.max(p - 1, 0));
+  }, [page, pages, hasIndex, onNextDoc]);
 
   // Clavier
   useEffect(() => {
@@ -143,18 +165,52 @@ export default function BookReader({
           }}
           dangerouslySetInnerHTML={{ __html: html }}
         />
+
+        {/* Page Sommaire : liste des documents du dossier, cliquables en mode lecture */}
+        {onIndex && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            className="absolute inset-0 overflow-y-auto px-6 py-6"
+            style={{ backgroundColor: bg, fontFamily: "Georgia, 'Times New Roman', serif" }}
+          >
+            <h2 className="text-[1.4em] font-bold mb-1">Sommaire du dossier</h2>
+            <p className={`text-sm mb-5 ${muted}`}>{siblings!.length} document{siblings!.length > 1 ? "s" : ""} — touche un titre pour l ouvrir en mode lecture.</p>
+            <ol className="space-y-1">
+              {siblings!.map((s, i) => {
+                const isCurrent = s.id === currentId;
+                return (
+                  <li key={s.id}>
+                    <button
+                      onClick={() => !isCurrent && onOpenDoc && onOpenDoc(s.id)}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
+                        isCurrent
+                          ? (night ? "bg-white/10 font-bold" : "bg-black/10 font-bold")
+                          : (night ? "hover:bg-white/5" : "hover:bg-black/5")
+                      }`}
+                      style={{ fontSize: `${Math.min(fontPx, 20)}px` }}
+                    >
+                      <span className={`tabular-nums mr-2 ${muted}`}>{i + 1}.</span>
+                      {s.title}
+                      {isCurrent && <span className={`ml-2 text-xs ${muted}`}>(en cours)</span>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        )}
       </div>
 
       {/* Barre bas : navigation */}
       <div className={`flex items-center justify-between px-4 py-3 border-t ${border} shrink-0`}>
         <button onClick={() => go(-1)} disabled={page <= 0} className={`p-2 rounded-lg ${hover} disabled:opacity-30`}><ChevronLeft size={22} /></button>
         <span className={`text-sm tabular-nums ${muted}`}>
-          {page + 1} / {pages}
-          {page >= pages - 1 && onNextDoc && nextTitle && (
-            <span className="ml-2 not-italic">→ <em>{nextTitle}</em></span>
-          )}
+          {onIndex ? "Sommaire" : `${page + 1} / ${pages}`}
+          {!onIndex && page >= pages - 1 && hasIndex && <span className="ml-2">→ Sommaire</span>}
+          {onIndex && onNextDoc && nextTitle && <span className="ml-2">→ <em>{nextTitle}</em></span>}
         </span>
-        <button onClick={() => go(1)} disabled={page >= pages - 1 && !onNextDoc} className={`p-2 rounded-lg ${hover} disabled:opacity-30`}><ChevronRight size={22} /></button>
+        <button onClick={() => go(1)} disabled={page >= pages - 1 && !hasIndex && !onNextDoc || (onIndex && !onNextDoc)} className={`p-2 rounded-lg ${hover} disabled:opacity-30`}><ChevronRight size={22} /></button>
       </div>
     </div>
   );

@@ -23,9 +23,11 @@ interface DocEditorProps {
   backHref?: string;
   /** Prochain document texte du dossier (lecture continue en mode livre). */
   nextBookDoc?: { id: string; title: string } | null;
+  /** Tous les documents texte du dossier (page sommaire en fin de lecture). */
+  bookSiblings?: { id: string; title: string }[];
 }
 
-export default function DocEditor({ allTags: initialAllTags, initialData, prevHref, nextHref, backHref, nextBookDoc }: DocEditorProps) {
+export default function DocEditor({ allTags: initialAllTags, initialData, prevHref, nextHref, backHref, nextBookDoc, bookSiblings }: DocEditorProps) {
   const router = useRouter();
   const [title, setTitle] = useState(initialData.title);
   const [observation, setObservation] = useState(initialData.observation);
@@ -231,6 +233,9 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
           onClose={() => setShowBook(false)}
           nextTitle={nextBookDoc?.title}
           onNextDoc={nextBookDoc ? () => router.push(`/editdoc/${nextBookDoc.id}?book=1`) : undefined}
+          siblings={bookSiblings}
+          currentId={initialData.id}
+          onOpenDoc={(id) => router.push(`/editdoc/${id}?book=1`)}
         />
       )}
     </div>
