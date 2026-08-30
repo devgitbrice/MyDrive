@@ -124,6 +124,12 @@ export default function FinancesView() {
             </li>
           ))}
         </ul>
+        {echScoped.some((e) => !e.paid) && (
+          <div className="mt-2 flex items-baseline justify-end gap-2 px-2.5 text-sm">
+            <span className="text-neutral-500">Total à payer{scope !== "tout" ? ` (${scope})` : ""} :</span>
+            <span className="font-bold tabular-nums text-amber-400">{eur(echDue)}</span>
+          </div>
+        )}
       </section>
 
       {/* Transactions */}
