@@ -37,7 +37,7 @@ const subcat = (t: QTx) => t.subcategory || NON_CLASSE;
 type Override = { category?: string; subcategory?: string; contextNote?: string; project?: string };
 const OVERRIDES_TITLE = "Qonto — Catégories corrigées";
 
-export default function QontoView({ txs, error, subtitle = "compte Nouvo Media" }: { txs: QTx[] | null; error: string | null; subtitle?: string }) {
+export default function QontoView({ txs, error, subtitle = "compte Nouvo Media", balance = null }: { txs: QTx[] | null; error: string | null; subtitle?: string; balance?: number | null }) {
   const [year, setYear] = useState<string>("");
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(PAGE);
@@ -215,7 +215,13 @@ export default function QontoView({ txs, error, subtitle = "compte Nouvo Media" 
       </div>
 
       {/* Cartes synthèse */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className={`grid grid-cols-2 gap-3 ${balance !== null ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
+        {balance !== null && (
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-3">
+            <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1">Solde actuel (tous comptes)</div>
+            <div className="text-lg font-bold tabular-nums text-white">{eur(balance)}</div>
+          </div>
+        )}
         <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-3">
           <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1">Encaissements</div>
           <div className="text-lg font-bold tabular-nums text-green-400">{eur(totals.credit)}</div>

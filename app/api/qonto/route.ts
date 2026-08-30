@@ -46,8 +46,8 @@ export async function GET(req: NextRequest) {
       const login = process.env[live.loginEnv];
       const secret = process.env[live.secretEnv];
       if (login && secret) {
-        const txs = await fetchQontoApiTxs(login, secret);
-        return Response.json({ ok: true, count: txs.length, fetchedAt: new Date().toISOString(), live: true, transactions: txs });
+        const { txs, balance, accounts } = await fetchQontoApiTxs(login, secret);
+        return Response.json({ ok: true, count: txs.length, fetchedAt: new Date().toISOString(), live: true, balance, accounts, transactions: txs });
       }
       const { txs, fetchedAt } = await txsFromDrive(live.docTitle);
       return Response.json({ ok: true, count: txs.length, fetchedAt, live: false, transactions: txs });

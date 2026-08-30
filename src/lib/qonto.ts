@@ -85,16 +85,21 @@ interface QontoApiTx {
   note?: string;
   cashflow_category?: { name?: string } | null;
   cashflow_subcategory?: { name?: string } | null;
+  transfer?: { counterparty_account_number?: string } | null;
+  income?: { counterparty_account_number?: string } | null;
 }
 
 // Lecture directe (temps réel) de l'API Qonto avec une clé
 // login:secret (Réglages Qonto → Intégrations → Clé API).
-export async function fetchQontoApiTxs(login: string, secret: string): Promise<CompactTx[]> {
+export async function fetchQontoApiTxs(login: string, secret: string): Promise<{ txs: CompactTx[]; balance: number; accounts: { name: string; balance: number }[] }> {
   const H = { Authorization: `${login}:${secret}` };
   const orgRes = await fetch("https://thirdparty.qonto.com/v2/organization", { headers: H });
   if (!orgRes.ok) throw new Error(`Qonto API organization → ${orgRes.status}`);
   const org = await orgRes.json();
-  const accounts: { id: string; name?: string }[] = org.organization?.bank_accounts || [];
+  const accounts: { id: string; name?: string; iban?: string; balance?: number }[] = org.organization?.bank_accounts || [];
+  // Les virements entre nos propres comptes (Compte principal ↔ Coffre)
+  // sont repérés par l'IBAN de la contrepartie et écartés.
+  const ownIbans = new Set(accounts.map((a) => a.iban).filter(Boolean));
 
   const all: CompactTx[] = [];
   for (const acc of accounts) {
@@ -107,6 +112,8 @@ export async function fetchQontoApiTxs(login: string, secret: string): Promise<C
       if (!res.ok) throw new Error(`Qonto API transactions → ${res.status}`);
       const j: { transactions?: QontoApiTx[]; meta?: { next_page?: number | null } } = await res.json();
       for (const t of (j.transactions || []) as QontoApiTx[]) {
+        const cpIban = t.transfer?.counterparty_account_number || t.income?.counterparty_account_number;
+        if (cpIban && ownIbans.has(cpIban)) continue;
         all.push({
           id: t.transaction_id,
           date: t.emitted_at,
@@ -126,7 +133,8 @@ export async function fetchQontoApiTxs(login: string, secret: string): Promise<C
       page = j.meta?.next_page ?? null;
     }
   }
-  return all;
+  const balance = accounts.reduce((s, a) => s + (Number(a.balance) || 0), 0);
+  return { txs: all, balance, accounts: accounts.map((a) => ({ name: a.name || "Compte", balance: Number(a.balance) || 0 })) };
 }
 
 export async function fetchQontoRows(sheetId = QONTO_SHEET_ID): Promise<QontoRow[]> {

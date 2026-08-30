@@ -18,6 +18,8 @@ export default function FinancesTabs() {
   const [gennnError, setGennnError] = useState<string | null>(null);
   const [nmTxs, setNmTxs] = useState<QTx[] | null>(null);
   const [nmError, setNmError] = useState<string | null>(null);
+  const [nmBalance, setNmBalance] = useState<number | null>(null);
+  const [gennnBalance, setGennnBalance] = useState<number | null>(null);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -42,6 +44,7 @@ export default function FinancesTabs() {
         if (!alive) return;
         if (!data.ok) { setGennnError(data.error || "Erreur de chargement"); return; }
         setGennnTxs(data.transactions);
+        if (typeof data.balance === "number") setGennnBalance(data.balance);
       } catch {
         if (alive) setGennnError("Impossible de charger les données Qonto Gennn.");
       }
@@ -53,6 +56,7 @@ export default function FinancesTabs() {
         if (!alive) return;
         if (!data.ok) { setNmError(data.error || "Erreur de chargement"); return; }
         setNmTxs(data.transactions);
+        if (typeof data.balance === "number") setNmBalance(data.balance);
       } catch {
         if (alive) setNmError("Impossible de charger les données Qonto Nouvo Media (new).");
       }
@@ -125,8 +129,8 @@ export default function FinancesTabs() {
       </div>
       {tab === "suivi" ? <FinancesView bunqNet={bunqNet} bunqError={bunqError} />
         : tab === "qonto" ? <QontoView txs={txs} error={error} />
-        : tab === "nm" ? <QontoView txs={nmTxs} error={nmError} subtitle="compte Nouvo Media (API directe)" />
-        : tab === "gennn" ? <QontoView txs={gennnTxs} error={gennnError} subtitle="compte Gennn" />
+        : tab === "nm" ? <QontoView txs={nmTxs} error={nmError} subtitle="compte Nouvo Media (API directe)" balance={nmBalance} />
+        : tab === "gennn" ? <QontoView txs={gennnTxs} error={gennnError} subtitle="compte Gennn" balance={gennnBalance} />
         : tab === "perso" ? <QontoView txs={bunqTxs} error={bunqError} subtitle="compte bunq perso" />
         : <ShopView />}
     </div>
