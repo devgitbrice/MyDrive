@@ -19,7 +19,7 @@ async function uid(): Promise<string | null> {
   try { const { data } = await supabase.auth.getUser(); return data.user?.id ?? null; } catch { return null; }
 }
 
-export default function FinancesView() {
+export default function FinancesView({ bunqNet, bunqError }: { bunqNet?: number | null; bunqError?: string | null } = {}) {
   const [txs, setTxs] = useState<Tx[]>([]);
   const [echs, setEchs] = useState<Ech[]>([]);
   const [scope, setScope] = useState<"tout" | Scope>("tout");
@@ -102,6 +102,9 @@ export default function FinancesView() {
         <Card label="Dépenses" value={eur(totals.dep)} color="text-red-400" />
         <Card label="Solde" value={eur(totals.solde)} color={totals.solde >= 0 ? "text-white" : "text-red-400"} />
         <Card label="À provisionner (échéances)" value={eur(echDue)} color="text-amber-400" />
+        <Card label={`Net ${new Date().getFullYear()} Personnel (banque bunq)`}
+          value={bunqNet != null ? eur(bunqNet) : bunqError ? "indisponible" : "…"}
+          color={bunqNet != null ? (bunqNet >= 0 ? "text-green-400" : "text-red-400") : "text-neutral-500"} />
       </div>
 
       {/* Échéances */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import FinancesView from "./FinancesView";
 import QontoView, { type QTx } from "./QontoView";
 import ShopView from "./ShopView";
@@ -46,6 +46,15 @@ export default function FinancesTabs() {
     return () => { alive = false; clearInterval(tick); };
   }, []);
 
+  // Net bunq de l'année en cours, affiché sur l'onglet Suivi.
+  const bunqNet = useMemo(() => {
+    if (!bunqTxs) return null;
+    const year = String(new Date().getFullYear());
+    return bunqTxs
+      .filter((t) => t.date.startsWith(year))
+      .reduce((s, t) => s + (t.side === "credit" ? t.amount : -t.amount), 0);
+  }, [bunqTxs]);
+
   const maj = fetchedAt ? new Date(fetchedAt) : null;
   const minutes = maj ? Math.max(0, Math.floor((now - maj.getTime()) / 60_000)) : null;
 
@@ -77,7 +86,7 @@ export default function FinancesTabs() {
           Shop
         </button>
       </div>
-      {tab === "suivi" ? <FinancesView />
+      {tab === "suivi" ? <FinancesView bunqNet={bunqNet} bunqError={bunqError} />
         : tab === "qonto" ? <QontoView txs={txs} error={error} />
         : tab === "perso" ? <QontoView txs={bunqTxs} error={bunqError} subtitle="compte bunq perso" />
         : <ShopView />}
