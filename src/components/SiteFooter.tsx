@@ -50,7 +50,7 @@ const SECTIONS: Section[] = [
     links: [
       { label: "Agentic", url: "agentic.gennn.live" },
       { label: "Gennn Press", url: "press.gennn.live" },
-      { label: "Pépite Club", url: "pepiteclub.com" },
+      { label: "Grab the Grail", url: "grabthegrail.com" },
     ],
   },
   {
