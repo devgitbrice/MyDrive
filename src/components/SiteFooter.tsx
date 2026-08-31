@@ -24,7 +24,6 @@ const SECTIONS: Section[] = [
       { label: "News", url: "www.gennn.live" },
       { label: "Studio", url: "studio.gennn.live" },
       { label: "Conseil", url: "conseil.gennn.live" },
-      { label: "Agentic", url: "aiagentic.gennn.live" },
       { label: "Formation", url: "formation.gennn.live" },
     ],
   },
@@ -44,6 +43,14 @@ const SECTIONS: Section[] = [
     links: [
       { label: "TTTrip", url: "tttrip.live" },
       { label: "Orrors", url: "orrors.com" },
+    ],
+  },
+  {
+    title: "Work In Progress",
+    links: [
+      { label: "Agentic", url: "agentic.gennn.live" },
+      { label: "Gennn Press", url: "press.gennn.live" },
+      { label: "Pépite Club", url: "pepiteclub.com" },
     ],
   },
   {
