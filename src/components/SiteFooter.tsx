@@ -52,6 +52,7 @@ const SECTIONS: Section[] = [
       { label: "Gennn Press", url: "press.gennn.live" },
       { label: "Grab the Grail", url: "grabthegrail.com" },
       { label: "MyChat", url: "mychat.bricematter.com" },
+      { label: "TopShoperz", url: "topshoperz.com" },
     ],
   },
   {
