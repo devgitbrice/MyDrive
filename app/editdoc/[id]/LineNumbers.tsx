@@ -63,7 +63,7 @@ export default function LineNumbers({ enabled, refreshKey }: { enabled: boolean;
           : "background:rgba(23,23,23,.85);color:#4ade80;border:1px solid rgba(74,222,128,.4);";
         btn.style.cssText =
           `position:absolute;left:${left}px;top:${top + 2}px;pointer-events:auto;` +
-          "min-width:26px;padding:1px 5px;border-radius:6px;font-size:10px;line-height:1.5;" +
+          "min-width:26px;padding:1px 5px;border-radius:6px;font-size:10px;line-height:1.5;font-weight:700;" +
           "font-family:monospace;text-align:right;cursor:pointer;" + idle;
         const hoverColor = light ? "#15803d" : "#86efac";
         btn.onmouseenter = () => { btn.style.color = hoverColor; btn.style.borderColor = hoverColor; };
