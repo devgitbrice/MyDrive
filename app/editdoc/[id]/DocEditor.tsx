@@ -222,7 +222,7 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
   const chromeClass = `transition-opacity duration-500 ${chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`;
 
   return (
-    <div className={`flex flex-col h-dvh w-full overflow-hidden ${light ? "bg-white text-neutral-900" : "bg-neutral-950 text-white"} ${chromeVisible ? "" : "cursor-none"}`}>
+    <div className={`flex flex-col h-dvh w-full overflow-hidden transition-[padding] duration-200 ${chatOpen ? "sm:pl-96" : ""} ${light ? "bg-white text-neutral-900" : "bg-neutral-950 text-white"} ${chromeVisible ? "" : "cursor-none"}`}>
       <FileSearchModal open={fileSearchOpen} onClose={() => setFileSearchOpen(false)} onInsert={handleInsertDocLink} />
       {externalUpdate && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2 rounded-full bg-green-600 text-white text-sm font-medium shadow-lg animate-pulse">
