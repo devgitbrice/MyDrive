@@ -6,6 +6,15 @@ import { authFetch } from "@/lib/authFetch";
 
 interface Msg { role: "user" | "assistant"; text: string }
 
+// Modèles OpenAI proposés, avec tarification ($ / million de tokens entrée · sortie)
+const MODELS = [
+  { id: "gpt-5.6-luna",  label: "GPT-5.6 Luna — éco ($0.20 · $1.20)" },
+  { id: "gpt-5.6-terra", label: "GPT-5.6 Terra — équilibré ($2 · $12)" },
+  { id: "gpt-5.6-sol",   label: "GPT-5.6 Sol — flagship ($4 · $20)" },
+  { id: "gpt-6-astra",   label: "GPT-6 Astra — max ($10 · $50)" },
+];
+const DEFAULT_MODEL = "gpt-5.6-terra";
+
 export default function DocChat({
   open,
   onClose,
@@ -22,7 +31,20 @@ export default function DocChat({
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [model, setModel] = useState(DEFAULT_MODEL);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Modèle mémorisé entre les sessions
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("docchat-model");
+      if (saved && MODELS.some((m) => m.id === saved)) setModel(saved);
+    } catch {}
+  }, []);
+  const changeModel = (id: string) => {
+    setModel(id);
+    try { localStorage.setItem("docchat-model", id); } catch {}
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -43,6 +65,7 @@ export default function DocChat({
           instruction,
           html: getHtml(),
           title,
+          model,
           history: messages.map((m) => ({ role: m.role, text: m.text })),
         }),
       });
@@ -64,7 +87,7 @@ export default function DocChat({
       {/* En-tête */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-800 shrink-0">
         <Sparkles size={16} className="text-teal-400" />
-        <span className="flex-1 text-sm font-semibold text-white">Éditer avec Claude</span>
+        <span className="flex-1 text-sm font-semibold text-white">Éditer avec l’IA</span>
         <button onClick={onClose} className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800">
           <X size={18} />
         </button>
@@ -94,14 +117,24 @@ export default function DocChat({
         ))}
         {loading && (
           <div className="flex items-center gap-2 text-sm text-neutral-500">
-            <Loader2 size={14} className="animate-spin" /> Claude travaille sur le document…
+            <Loader2 size={14} className="animate-spin" /> L’IA travaille sur le document…
           </div>
         )}
         <div ref={bottomRef} />
       </div>
 
       {/* Saisie */}
-      <div className="p-3 border-t border-neutral-800 shrink-0">
+      <div className="p-3 border-t border-neutral-800 shrink-0 space-y-2">
+        <select
+          value={model}
+          onChange={(e) => changeModel(e.target.value)}
+          title="Modèle utilisé (prix par million de tokens : entrée · sortie)"
+          className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-xs text-neutral-300 outline-none focus:border-teal-500"
+        >
+          {MODELS.map((m) => (
+            <option key={m.id} value={m.id}>{m.label}</option>
+          ))}
+        </select>
         <div className="flex items-end gap-2">
           <textarea
             value={input}

@@ -72,7 +72,7 @@ export default function DocHeader({
         {onToggleChat && (
           <button
             onClick={onToggleChat}
-            title="Editer avec Claude (chat)"
+            title="Editer avec l’IA (chat)"
             className={`w-9 h-9 flex items-center justify-center rounded-full border transition-colors shrink-0 ${light ? "bg-neutral-200 border-neutral-300 text-teal-700 hover:bg-neutral-300" : "bg-neutral-800 border-neutral-700 text-teal-400 hover:bg-neutral-700"}`}
           >
             <Sparkles size={16} />
