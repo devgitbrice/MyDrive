@@ -231,7 +231,7 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
       )}
       <div className={chromeClass}>
         <DocHeader id={initialData.id} backHref={backHref} title={title} observation={observation} status={status} onTitleChange={handleTitleChange} onObservationChange={handleObservationChange} getContent={() => contentRef.current} onOpenBook={() => setShowBook(true)} onToggleChat={() => setChatOpen((v) => !v)} />
-        <DocRibbon tocOpen={tocOpen} setTocOpen={setTocOpen} />
+        <DocRibbon tocOpen={tocOpen} setTocOpen={setTocOpen} chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)} />
       </div>
 
       {/* key={contentKey} force le re-mount du BlockManager quand un changement Realtime arrive */}

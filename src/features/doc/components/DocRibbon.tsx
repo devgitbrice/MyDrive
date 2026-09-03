@@ -5,16 +5,18 @@ import {
   List, ListOrdered,
   AlignLeft, AlignCenter, AlignRight,
   Minus, Quote, Code, Undo, Redo, PanelLeft,
-  Sun, Moon
+  Sun, Moon, Sparkles
 } from "lucide-react";
 import { useThemeStore } from "@/store/themeStore";
 
 interface DocRibbonProps {
   tocOpen: boolean;
   setTocOpen: (val: boolean) => void;
+  chatOpen?: boolean;
+  onToggleChat?: () => void;
 }
 
-export default function DocRibbon({ tocOpen, setTocOpen }: DocRibbonProps) {
+export default function DocRibbon({ tocOpen, setTocOpen, chatOpen, onToggleChat }: DocRibbonProps) {
   const { theme, toggleTheme } = useThemeStore();
   const light = theme === "light";
 
@@ -69,6 +71,20 @@ export default function DocRibbon({ tocOpen, setTocOpen }: DocRibbonProps) {
       >
         <PanelLeft size={16} />
       </button>
+
+      {/* Bouton IA : afficher / masquer la sidebar de chat */}
+      {onToggleChat && (
+        <button
+          onClick={onToggleChat}
+          title={chatOpen ? "Masquer l'assistant IA" : "Afficher l'assistant IA"}
+          className={`flex items-center gap-1 px-2 py-1.5 rounded transition-colors text-xs font-bold ${chatOpen
+            ? light ? "text-teal-700 bg-neutral-200" : "text-teal-400 bg-neutral-800"
+            : light ? "text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900" : "text-neutral-300 hover:bg-neutral-700 hover:text-white"
+          }`}
+        >
+          <Sparkles size={15} /> IA
+        </button>
+      )}
       <div className={`w-px h-6 ${light ? "bg-neutral-300" : "bg-neutral-700"} mx-1.5 shrink-0`} />
 
       {groups.map((group, gi) => (
