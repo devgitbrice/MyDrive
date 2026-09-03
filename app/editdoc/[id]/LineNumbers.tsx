@@ -52,6 +52,8 @@ export default function LineNumbers({ enabled, refreshKey }: { enabled: boolean;
         const r = el.getBoundingClientRect();
         if (r.height === 0) return;
         const top = r.top - contRect.top + container.scrollTop;
+        // Badge collé à gauche du texte (suit l'indentation), pas au bord de l'écran
+        const left = Math.max(4, r.left - contRect.left - 38);
         const btn = document.createElement("button");
         btn.textContent = String(n);
         btn.title = `Ligne ${n} — cliquer pour l'ajouter au prompt IA`;
@@ -60,7 +62,7 @@ export default function LineNumbers({ enabled, refreshKey }: { enabled: boolean;
           ? "background:rgba(255,255,255,.95);color:#16a34a;border:1px solid rgba(22,163,74,.45);"
           : "background:rgba(23,23,23,.85);color:#4ade80;border:1px solid rgba(74,222,128,.4);";
         btn.style.cssText =
-          `position:absolute;left:6px;top:${top + 2}px;pointer-events:auto;` +
+          `position:absolute;left:${left}px;top:${top + 2}px;pointer-events:auto;` +
           "min-width:26px;padding:1px 5px;border-radius:6px;font-size:10px;line-height:1.5;" +
           "font-family:monospace;text-align:right;cursor:pointer;" + idle;
         const hoverColor = light ? "#15803d" : "#86efac";
