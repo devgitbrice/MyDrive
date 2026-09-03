@@ -6,6 +6,34 @@ import { RefreshCw, X, Sparkles } from "lucide-react";
 const CHECK_MS = 90_000; // vérifie toutes les 90 s (+ au retour sur l'onglet)
 const SCROLL_KEY = "update-restore";
 
+// Petit son de cloche (Web Audio, sans fichier). Silencieux si le navigateur
+// bloque l'audio avant toute interaction — dans ce cas on échoue sans bruit.
+function playBell() {
+  try {
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const ring = (freq: number, delay: number, vol: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 1.3);
+    };
+    // Fondamentale + harmoniques légères = timbre de clochette
+    ring(880, 0, 0.18);
+    ring(1320, 0, 0.07);
+    ring(1760, 0.005, 0.04);
+    setTimeout(() => ctx.close().catch(() => {}), 1800);
+  } catch {}
+}
+
 async function fetchVersion(): Promise<{ version: string; message: string } | null> {
   try {
     const r = await fetch("/api/version", { cache: "no-store" });
@@ -49,7 +77,10 @@ export default function UpdateNotifier() {
         return;
       }
       if (v.version !== initialVersion.current) {
-        setUpdate({ message: v.message });
+        setUpdate((prev) => {
+          if (!prev) playBell(); // 🔔 une seule fois, à la première détection
+          return { message: v.message };
+        });
       }
     };
 
