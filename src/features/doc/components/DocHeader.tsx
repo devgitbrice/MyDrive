@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, Share2, BookOpen } from "lucide-react";
+import { ArrowLeft, Share2, BookOpen, Sparkles } from "lucide-react";
 import DocExportMenu from "@/components/DocExportMenu";
 import TtsButton from "@/components/TtsButton";
 import SummaryAudioButton from "@/components/SummaryAudioButton";
@@ -18,6 +18,7 @@ interface DocHeaderProps {
   onObservationChange: (val: string) => void;
   getContent?: () => string;
   onOpenBook?: () => void;
+  onToggleChat?: () => void;
 }
 
 export default function DocHeader({
@@ -30,6 +31,7 @@ export default function DocHeader({
   onObservationChange,
   getContent,
   onOpenBook,
+  onToggleChat,
 }: DocHeaderProps) {
   const light = useThemeStore((s) => s.theme) === "light";
   const [shareCopied, setShareCopied] = useState(false);
@@ -66,6 +68,16 @@ export default function DocHeader({
           placeholder="Titre du document..."
           className={`flex-1 bg-transparent text-xl font-bold outline-none ${light ? "text-neutral-900 placeholder-neutral-400" : "text-white placeholder-neutral-600"}`}
         />
+
+        {onToggleChat && (
+          <button
+            onClick={onToggleChat}
+            title="Editer avec Claude (chat)"
+            className={`w-9 h-9 flex items-center justify-center rounded-full border transition-colors shrink-0 ${light ? "bg-neutral-200 border-neutral-300 text-teal-700 hover:bg-neutral-300" : "bg-neutral-800 border-neutral-700 text-teal-400 hover:bg-neutral-700"}`}
+          >
+            <Sparkles size={16} />
+          </button>
+        )}
 
         {onOpenBook && (
           <button

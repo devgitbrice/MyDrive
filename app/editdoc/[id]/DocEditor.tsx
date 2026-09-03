@@ -9,6 +9,7 @@ import DocHeader from "@/features/doc/components/DocHeader";
 import DocRibbon from "@/features/doc/components/DocRibbon";
 import BlockManager from "@/features/doc/components/BlockManager";
 import BookReader from "@/features/doc/components/BookReader";
+import DocChat from "./DocChat";
 import FileSearchModal, { getEditUrl, type SearchResult } from "@/components/FileSearchModal";
 import { useThemeStore } from "@/store/themeStore";
 import { supabase } from "@/lib/supabaseClient";
@@ -39,6 +40,8 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
   const [mobileTagsOpen, setMobileTagsOpen] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
   const [showBook, setShowBook] = useState(false);
+  // Chat Claude : ouvert d'office sur un document vierge (création instantanée)
+  const [chatOpen, setChatOpen] = useState(!(initialData.content || "").trim());
 
   // Lecture continue : arrivé via « ?book=1 », on ouvre directement le mode livre.
   useEffect(() => {
@@ -80,6 +83,14 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => autoSave(t, c, o), 1000);
   }, [autoSave]);
+
+  // Applique un document produit par l'assistant Claude : remplace le contenu + sauvegarde
+  const applyAssistantHtml = useCallback((html: string) => {
+    contentRef.current = html;
+    setContentSnapshot(html);
+    setContentKey((k) => k + 1);
+    scheduleAutoSave(title, html, observation);
+  }, [scheduleAutoSave, title, observation]);
 
   useEffect(() => {
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
@@ -219,12 +230,20 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
         </div>
       )}
       <div className={chromeClass}>
-        <DocHeader id={initialData.id} backHref={backHref} title={title} observation={observation} status={status} onTitleChange={handleTitleChange} onObservationChange={handleObservationChange} getContent={() => contentRef.current} onOpenBook={() => setShowBook(true)} />
+        <DocHeader id={initialData.id} backHref={backHref} title={title} observation={observation} status={status} onTitleChange={handleTitleChange} onObservationChange={handleObservationChange} getContent={() => contentRef.current} onOpenBook={() => setShowBook(true)} onToggleChat={() => setChatOpen((v) => !v)} />
         <DocRibbon tocOpen={tocOpen} setTocOpen={setTocOpen} />
       </div>
 
       {/* key={contentKey} force le re-mount du BlockManager quand un changement Realtime arrive */}
       <BlockManager key={contentKey} initialHtml={contentSnapshot} tocOpen={tocOpen} onChange={handleContentChange} chromeVisible={chromeVisible} docTitle={title} />
+
+      <DocChat
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        title={title}
+        getHtml={() => contentRef.current}
+        onApply={applyAssistantHtml}
+      />
 
       {showBook && (
         <BookReader

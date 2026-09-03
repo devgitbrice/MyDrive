@@ -49,6 +49,17 @@ export default function AddMenu() {
     router.push(`/editvoyage/${data!.id}`);
   }
 
+  // Création instantanée d'un document : feuille vierge type Word, ouverte directement.
+  async function createDocInstant() {
+    const { data, error } = await supabase.from("MyDrive").insert({
+      title: "Sans titre", type: "file", doc_type: "doc",
+      image_path: "", image_url: "", observation: "", content: "",
+      parent_id: getParentFromCookie(),
+    }).select("id").single();
+    if (error) throw new Error(error.message);
+    router.push(`/editdoc/${data!.id}`);
+  }
+
   async function createFiche(title: string) {
     const { data, error } = await supabase.from("MyDrive").insert({
       title, type: "file", doc_type: "fiche",
@@ -97,7 +108,11 @@ export default function AddMenu() {
   }
 
   function handleClick(kind: Kind) {
-    if (kind === "doc") { router.push("/newdoc"); closeMenu(); return; }
+    if (kind === "doc") {
+      setCreating(true);
+      createDocInstant().catch((e) => toast("Erreur : " + e.message)).finally(() => { setCreating(false); closeMenu(); });
+      return;
+    }
     if (kind === "python") { router.push("/newpython"); closeMenu(); return; }
     if (kind === "mindmap") { router.push("/newmindmap"); closeMenu(); return; }
     if (kind === "table") { router.push("/newtable"); closeMenu(); return; }
