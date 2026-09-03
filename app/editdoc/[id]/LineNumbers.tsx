@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useThemeStore } from "@/store/themeStore";
 
 /**
  * Énumère les « lignes » du document dans l'ordre : les enfants directs de
@@ -31,6 +32,8 @@ export function computeLineMap(maxLines = 400): string {
 }
 
 export default function LineNumbers({ enabled, refreshKey }: { enabled: boolean; refreshKey: number }) {
+  const light = useThemeStore((s) => s.theme) === "light";
+
   useEffect(() => {
     if (!enabled) return;
     const container = document.querySelector(".doc-scroll") as HTMLElement | null;
@@ -52,13 +55,16 @@ export default function LineNumbers({ enabled, refreshKey }: { enabled: boolean;
         const btn = document.createElement("button");
         btn.textContent = String(n);
         btn.title = `Ligne ${n} — cliquer pour l'ajouter au prompt IA`;
+        const idle = light
+          ? "background:rgba(255,255,255,.95);color:#525252;border:1px solid rgba(0,0,0,.2);"
+          : "background:rgba(23,23,23,.85);color:#a3a3a3;border:1px solid rgba(115,115,115,.35);";
         btn.style.cssText =
           `position:absolute;left:6px;top:${top + 2}px;pointer-events:auto;` +
           "min-width:26px;padding:1px 5px;border-radius:6px;font-size:10px;line-height:1.5;" +
-          "font-family:monospace;text-align:right;cursor:pointer;border:1px solid rgba(115,115,115,.35);" +
-          "background:rgba(23,23,23,.85);color:#8b8b8b;";
-        btn.onmouseenter = () => { btn.style.color = "#2dd4bf"; btn.style.borderColor = "#2dd4bf"; };
-        btn.onmouseleave = () => { btn.style.color = "#8b8b8b"; btn.style.borderColor = "rgba(115,115,115,.35)"; };
+          "font-family:monospace;text-align:right;cursor:pointer;" + idle;
+        const hoverColor = light ? "#0d9488" : "#2dd4bf";
+        btn.onmouseenter = () => { btn.style.color = hoverColor; btn.style.borderColor = hoverColor; };
+        btn.onmouseleave = () => { btn.style.cssText = btn.style.cssText.replace(/color:[^;]+;border:[^;]+;$/, "") ; btn.style.cssText += idle; };
         btn.onclick = (e) => {
           e.preventDefault();
           window.dispatchEvent(new CustomEvent("doc-line-click", { detail: { n } }));
@@ -84,7 +90,7 @@ export default function LineNumbers({ enabled, refreshKey }: { enabled: boolean;
       window.removeEventListener("resize", schedule);
       overlay.remove();
     };
-  }, [enabled, refreshKey]);
+  }, [enabled, refreshKey, light]);
 
   return null;
 }
