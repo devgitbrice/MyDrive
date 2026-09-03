@@ -5,6 +5,7 @@ import AuthGuard from "@/components/AuthGuard";
 import FloatingWidgets from "@/components/FloatingWidgets";
 import Toaster from "@/components/Toaster";
 import SiteFooter from "@/components/SiteFooter";
+import UpdateNotifier from "@/components/UpdateNotifier";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,6 +39,7 @@ export default function RootLayout({
           <SiteFooter />
           <FloatingWidgets />
           <Toaster />
+          <UpdateNotifier />
         </AuthGuard>
       </body>
     </html>
