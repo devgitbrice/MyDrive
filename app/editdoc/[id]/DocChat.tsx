@@ -1,11 +1,53 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Send, Loader2, Sparkles } from "lucide-react";
+import { X, Send, Loader2, Sparkles, Paperclip } from "lucide-react";
+import { toast } from "@/components/Toaster";
 import { authFetch } from "@/lib/authFetch";
 import { computeLineMap } from "./LineNumbers";
 
 interface Msg { role: "user" | "assistant"; text: string }
+interface Attachment { name: string; type: string; data: string; size: number }
+
+const MAX_TOTAL_BYTES = 3 * 1024 * 1024; // limite Vercel (~4.5 Mo de body)
+
+function bufToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  return btoa(bin);
+}
+
+// Compresse une image (max 1600 px, JPEG) pour tenir dans la limite d'envoi.
+async function compressImage(file: File): Promise<Attachment> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i); i.onerror = rej; i.src = url;
+    });
+    const max = 1600;
+    const scale = Math.min(1, max / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    const data = dataUrl.split(",")[1];
+    return { name: file.name.replace(/\.[^.]+$/, "") + ".jpg", type: "image/jpeg", data, size: Math.round(data.length * 0.75) };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function fileToAttachment(file: File): Promise<Attachment> {
+  if (file.type.startsWith("image/") && file.type !== "image/gif") {
+    return compressImage(file);
+  }
+  const buf = await file.arrayBuffer();
+  return { name: file.name, type: file.type, data: bufToBase64(buf), size: file.size };
+}
 
 // Modèles OpenAI proposés, avec tarification ($ / million de tokens entrée · sortie)
 const MODELS = [
@@ -39,7 +81,32 @@ export default function DocChat({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [model, setModel] = useState(DEFAULT_MODEL);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [reading, setReading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  async function addFiles(list: FileList | null) {
+    if (!list || list.length === 0) return;
+    setReading(true);
+    try {
+      const next = [...attachments];
+      for (const file of Array.from(list)) {
+        const att = await fileToAttachment(file);
+        const total = next.reduce((s, a) => s + a.size, 0) + att.size;
+        if (total > MAX_TOTAL_BYTES) {
+          toast(`« ${file.name} » dépasse la limite d'envoi (3 Mo au total). Retire une pièce ou choisis un fichier plus léger.`);
+          continue;
+        }
+        next.push(att);
+      }
+      setAttachments(next.slice(0, 6));
+    } catch {
+      toast("Impossible de lire un des fichiers.");
+    } finally {
+      setReading(false);
+    }
+  }
 
   // Modèle mémorisé entre les sessions
   useEffect(() => {
@@ -75,7 +142,10 @@ export default function DocChat({
     const instruction = input.trim();
     if (!instruction || loading) return;
     setInput("");
-    const nextMsgs: Msg[] = [...messages, { role: "user", text: instruction }];
+    const sentFiles = attachments;
+    setAttachments([]);
+    const shown = sentFiles.length ? instruction + "\n" + sentFiles.map((a) => `📎 ${a.name}`).join("\n") : instruction;
+    const nextMsgs: Msg[] = [...messages, { role: "user", text: shown }];
     setMessages(nextMsgs);
     setLoading(true);
     try {
@@ -89,6 +159,7 @@ export default function DocChat({
           description,
           model,
           lineMap: /ligne\s+\d+/i.test(instruction) ? computeLineMap() : undefined,
+          files: sentFiles.map(({ name, type, data }) => ({ name, type, data })),
           history: messages.map((m) => ({ role: m.role, text: m.text })),
         }),
       });
@@ -150,6 +221,25 @@ export default function DocChat({
 
       {/* Saisie */}
       <div className="p-3 border-t border-neutral-800 shrink-0 space-y-2">
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {attachments.map((a, i) => (
+              <span key={i} className="inline-flex items-center gap-1 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1 text-[11px] text-neutral-300 max-w-full">
+                <Paperclip size={11} className="shrink-0" />
+                <span className="truncate max-w-[160px]">{a.name}</span>
+                <button onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))} className="text-neutral-500 hover:text-red-400 shrink-0"><X size={12} /></button>
+              </span>
+            ))}
+          </div>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".pdf,.docx,.pptx,.txt,.md,image/*"
+          className="hidden"
+          onChange={(e) => { addFiles(e.target.files); e.currentTarget.value = ""; }}
+        />
         <select
           value={model}
           onChange={(e) => changeModel(e.target.value)}
@@ -171,6 +261,14 @@ export default function DocChat({
             placeholder="Que faire sur ce document ?"
             className="flex-1 resize-none bg-neutral-900 border border-neutral-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-teal-500 placeholder:text-neutral-600"
           />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={reading}
+            title="Joindre des fichiers (PDF, Word, PowerPoint, images…)"
+            className="p-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 disabled:opacity-40 transition-colors shrink-0"
+          >
+            {reading ? <Loader2 size={16} className="animate-spin" /> : <Paperclip size={16} />}
+          </button>
           <button
             onClick={send}
             disabled={loading || !input.trim()}
