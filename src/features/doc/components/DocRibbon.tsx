@@ -1,11 +1,11 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Bold, Italic, Underline, Strikethrough,
   Heading1, Heading2, Heading3, Type,
   List, ListOrdered,
   AlignLeft, AlignCenter, AlignRight,
   Minus, Quote, Code, Undo, Redo, PanelLeft,
-  Sun, Moon, Sparkles, Hash
+  Sun, Moon, Sparkles, Hash, Maximize, Minimize
 } from "lucide-react";
 import { useThemeStore } from "@/store/themeStore";
 
@@ -21,6 +21,20 @@ interface DocRibbonProps {
 export default function DocRibbon({ tocOpen, setTocOpen, chatOpen, onToggleChat, lineNumbersOn, onToggleLineNumbers }: DocRibbonProps) {
   const { theme, toggleTheme } = useThemeStore();
   const light = theme === "light";
+
+  // Plein écran (API Fullscreen du navigateur)
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  const toggleFullscreen = () => {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen();
+    } catch {}
+  };
 
   const exec = (e: React.MouseEvent, command: string, value?: string) => {
     e.preventDefault();
@@ -125,6 +139,16 @@ export default function DocRibbon({ tocOpen, setTocOpen, chatOpen, onToggleChat,
         <input type="color" defaultValue="#000000" onMouseDown={(e) => e.preventDefault()} onChange={(e) => document.execCommand("hiliteColor", false, e.target.value)} className="w-4 h-4 border-0 bg-transparent cursor-pointer" />
       </label>
 
+      <div className={`w-px h-6 ${light ? "bg-neutral-300" : "bg-neutral-700"} mx-1.5 shrink-0`} />
+
+      {/* Plein écran */}
+      <button
+        onClick={toggleFullscreen}
+        title={isFullscreen ? "Quitter le plein écran" : "Plein écran"}
+        className={`p-1.5 rounded transition-colors ${light ? "text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900" : "text-neutral-300 hover:bg-neutral-700 hover:text-white"}`}
+      >
+        {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+      </button>
       <div className={`w-px h-6 ${light ? "bg-neutral-300" : "bg-neutral-700"} mx-1.5 shrink-0`} />
 
       {/* Toggle Jour / Nuit */}
