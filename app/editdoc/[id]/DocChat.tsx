@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Send, Loader2, Sparkles } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
+import { computeLineMap } from "./LineNumbers";
 
 interface Msg { role: "user" | "assistant"; text: string }
 
@@ -19,14 +20,20 @@ export default function DocChat({
   open,
   onClose,
   title,
+  description,
   getHtml,
   onApply,
+  onTitle,
+  onDesc,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  description?: string;
   getHtml: () => string;
   onApply: (html: string) => void;
+  onTitle?: (t: string) => void;
+  onDesc?: (d: string) => void;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -50,6 +57,20 @@ export default function DocChat({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  // Clic sur un numéro de ligne → ajoute un gabarit dans le prompt (nouvelle ligne si déjà rempli)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const n = (e as CustomEvent).detail?.n;
+      if (!n) return;
+      setInput((prev) => {
+        const line = `Ligne ${n} : modification attendue : `;
+        return prev.trim() ? prev.replace(/\s*$/, "") + "\n" + line : line;
+      });
+    };
+    window.addEventListener("doc-line-click", handler);
+    return () => window.removeEventListener("doc-line-click", handler);
+  }, []);
+
   async function send() {
     const instruction = input.trim();
     if (!instruction || loading) return;
@@ -65,13 +86,17 @@ export default function DocChat({
           instruction,
           html: getHtml(),
           title,
+          description,
           model,
+          lineMap: /ligne\s+\d+/i.test(instruction) ? computeLineMap() : undefined,
           history: messages.map((m) => ({ role: m.role, text: m.text })),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erreur assistant");
       if (data.html) onApply(data.html);
+      if (data.title && onTitle) onTitle(data.title);
+      if (data.desc && onDesc) onDesc(data.desc);
       setMessages((prev) => [...prev, { role: "assistant", text: data.reply || "Fait." }]);
     } catch (e: any) {
       setMessages((prev) => [...prev, { role: "assistant", text: "⚠️ " + (e?.message || "Erreur") }]);

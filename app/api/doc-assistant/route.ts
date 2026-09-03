@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireUser(req);
   if (!auth.ok) return auth.res;
   try {
-    const { instruction, html, title, history, model: reqModel } = await req.json();
+    const { instruction, html, title, description, history, model: reqModel, lineMap } = await req.json();
     if (!instruction || typeof instruction !== "string") {
       return NextResponse.json({ error: "Instruction requise" }, { status: 400 });
     }
@@ -28,8 +28,12 @@ export async function POST(req: NextRequest) {
       {
         role: "system",
         content:
-          "Tu es l'assistant d'édition de documents de MyDrive. Tu aides à rédiger et modifier des documents HTML (balises autorisées : h1, h2, h3, p, ul, ol, li, strong, em, table/thead/tbody/tr/th/td, a, code, pre, blockquote). " +
-          "Quand l'utilisateur demande une MODIFICATION ou un AJOUT au document : réponds par une phrase courte décrivant ce que tu as fait, puis renvoie le document COMPLET mis à jour entre balises <doc> et </doc> (tout le document, pas seulement la partie modifiée ; conserve ce qui ne change pas). " +
+          "Tu es l'assistant d'édition de documents de MyDrive. Tu aides à rédiger et modifier des documents HTML. " +
+          "Balises autorisées : h1, h2, h3, p, ul, ol, li, strong, em, u, s, hr, table/thead/tbody/tr/th/td, a, code, pre, blockquote, span. " +
+          "Mises en forme autorisées (les mêmes que le ruban de l'éditeur) : gras <strong>, italique <em>, souligné <u>, barré <s>, couleur de texte et surlignage via <span style=\"color:#...\"> ou <span style=\"background-color:#...\">, alignement via style=\"text-align:center|right|left\" sur les blocs, séparateur <hr>, citation <blockquote>, code <pre>. Utilise-les librement quand la demande s'y prête. " +
+          "Quand l'utilisateur demande une MODIFICATION ou un AJOUT au contenu : réponds par une phrase courte décrivant ce que tu as fait, puis renvoie le document COMPLET mis à jour entre balises <doc> et </doc> (tout le document, pas seulement la partie modifiée ; conserve ce qui ne change pas). " +
+          "Tu peux aussi modifier le TITRE du document (renvoie alors <title>nouveau titre</title>) et sa DESCRIPTION courte (renvoie <desc>nouvelle description</desc>) — uniquement si la demande le justifie. " +
+          "Si la demande référence des lignes (« Ligne 25 »), utilise le repérage des lignes fourni : chaque numéro correspond à un élément du document dans l'ordre (les <li> comptent individuellement). " +
           "Quand c'est une simple question sans modification : réponds normalement, sans balise <doc>. " +
           "Réponds en français. Ne mets jamais de markdown dans le document, uniquement du HTML.",
       },
@@ -40,8 +44,9 @@ export async function POST(req: NextRequest) {
       {
         role: "user",
         content:
-          `Document actuel (titre : ${title || "(sans titre)"}) :\n<doc>\n${doc}\n</doc>\n\n` +
-          `Demande : ${instruction}`,
+          `Document actuel (titre : ${title || "(sans titre)"} ; description : ${description || "(vide)"}) :\n<doc>\n${doc}\n</doc>\n` +
+          (lineMap ? `\nRepérage des lignes (n° : balise + extrait) :\n${String(lineMap).slice(0, 20000)}\n` : "") +
+          `\nDemande : ${instruction}`,
       },
     ];
 
@@ -70,9 +75,21 @@ export async function POST(req: NextRequest) {
     // Sépare la réponse conversationnelle du document mis à jour
     const match = text.match(/<doc>([\s\S]*?)<\/doc>/);
     const newHtml = match ? match[1].trim() : null;
-    const reply = text.replace(/<doc>[\s\S]*?<\/doc>/, "").trim() || (newHtml ? "Document mis à jour." : "");
+    const titleMatch = text.match(/<title>([\s\S]*?)<\/title>/);
+    const descMatch = text.match(/<desc>([\s\S]*?)<\/desc>/);
+    const reply = text
+      .replace(/<doc>[\s\S]*?<\/doc>/, "")
+      .replace(/<title>[\s\S]*?<\/title>/, "")
+      .replace(/<desc>[\s\S]*?<\/desc>/, "")
+      .trim() || (newHtml || titleMatch || descMatch ? "Document mis à jour." : "");
 
-    return NextResponse.json({ reply, html: newHtml, model });
+    return NextResponse.json({
+      reply,
+      html: newHtml,
+      title: titleMatch ? titleMatch[1].trim().slice(0, 200) : null,
+      desc: descMatch ? descMatch[1].trim().slice(0, 500) : null,
+      model,
+    });
   } catch (e) {
     console.error("doc-assistant error:", e);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

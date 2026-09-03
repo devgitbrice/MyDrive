@@ -10,6 +10,7 @@ import DocRibbon from "@/features/doc/components/DocRibbon";
 import BlockManager from "@/features/doc/components/BlockManager";
 import BookReader from "@/features/doc/components/BookReader";
 import DocChat from "./DocChat";
+import LineNumbers from "./LineNumbers";
 import FileSearchModal, { getEditUrl, type SearchResult } from "@/components/FileSearchModal";
 import { useThemeStore } from "@/store/themeStore";
 import { supabase } from "@/lib/supabaseClient";
@@ -42,6 +43,15 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
   const [showBook, setShowBook] = useState(false);
   // Chat Claude : ouvert d'office sur un document vierge (création instantanée)
   const [chatOpen, setChatOpen] = useState(!(initialData.content || "").trim());
+  // Numéros de ligne cliquables (bouton # du ruban)
+  const [lineNumbersOn, setLineNumbersOn] = useState(false);
+
+  // Un clic sur un numéro de ligne ouvre le chat s'il est fermé
+  useEffect(() => {
+    const openChat = () => setChatOpen(true);
+    window.addEventListener("doc-line-click", openChat);
+    return () => window.removeEventListener("doc-line-click", openChat);
+  }, []);
 
   // Lecture continue : arrivé via « ?book=1 », on ouvre directement le mode livre.
   useEffect(() => {
@@ -231,7 +241,7 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
       )}
       <div className={chromeClass}>
         <DocHeader id={initialData.id} backHref={backHref} title={title} observation={observation} status={status} onTitleChange={handleTitleChange} onObservationChange={handleObservationChange} getContent={() => contentRef.current} onOpenBook={() => setShowBook(true)} onToggleChat={() => setChatOpen((v) => !v)} />
-        <DocRibbon tocOpen={tocOpen} setTocOpen={setTocOpen} chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)} />
+        <DocRibbon tocOpen={tocOpen} setTocOpen={setTocOpen} chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)} lineNumbersOn={lineNumbersOn} onToggleLineNumbers={() => setLineNumbersOn((v) => !v)} />
       </div>
 
       {/* key={contentKey} force le re-mount du BlockManager quand un changement Realtime arrive */}
@@ -241,9 +251,14 @@ export default function DocEditor({ allTags: initialAllTags, initialData, prevHr
         open={chatOpen}
         onClose={() => setChatOpen(false)}
         title={title}
+        description={observation}
         getHtml={() => contentRef.current}
         onApply={applyAssistantHtml}
+        onTitle={handleTitleChange}
+        onDesc={handleObservationChange}
       />
+
+      <LineNumbers enabled={lineNumbersOn} refreshKey={contentKey} />
 
       {showBook && (
         <BookReader

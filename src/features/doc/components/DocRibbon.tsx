@@ -5,7 +5,7 @@ import {
   List, ListOrdered,
   AlignLeft, AlignCenter, AlignRight,
   Minus, Quote, Code, Undo, Redo, PanelLeft,
-  Sun, Moon, Sparkles
+  Sun, Moon, Sparkles, Hash
 } from "lucide-react";
 import { useThemeStore } from "@/store/themeStore";
 
@@ -14,9 +14,11 @@ interface DocRibbonProps {
   setTocOpen: (val: boolean) => void;
   chatOpen?: boolean;
   onToggleChat?: () => void;
+  lineNumbersOn?: boolean;
+  onToggleLineNumbers?: () => void;
 }
 
-export default function DocRibbon({ tocOpen, setTocOpen, chatOpen, onToggleChat }: DocRibbonProps) {
+export default function DocRibbon({ tocOpen, setTocOpen, chatOpen, onToggleChat, lineNumbersOn, onToggleLineNumbers }: DocRibbonProps) {
   const { theme, toggleTheme } = useThemeStore();
   const light = theme === "light";
 
@@ -83,6 +85,20 @@ export default function DocRibbon({ tocOpen, setTocOpen, chatOpen, onToggleChat 
           }`}
         >
           <Sparkles size={15} /> IA
+        </button>
+      )}
+
+      {/* Numéros de ligne : cliquer un numéro l'ajoute au prompt IA */}
+      {onToggleLineNumbers && (
+        <button
+          onClick={onToggleLineNumbers}
+          title={lineNumbersOn ? "Masquer les numéros de ligne" : "Afficher les numéros de ligne (cliquer un numéro l'ajoute au prompt IA)"}
+          className={`p-1.5 rounded transition-colors ${lineNumbersOn
+            ? light ? "text-teal-700 bg-neutral-200" : "text-teal-400 bg-neutral-800"
+            : light ? "text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900" : "text-neutral-300 hover:bg-neutral-700 hover:text-white"
+          }`}
+        >
+          <Hash size={16} />
         </button>
       )}
       <div className={`w-px h-6 ${light ? "bg-neutral-300" : "bg-neutral-700"} mx-1.5 shrink-0`} />

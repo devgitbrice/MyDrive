@@ -255,7 +255,7 @@ export default function BlockManager({ initialHtml, tocOpen, onChange, chromeVis
   return (
     <div className={`flex-1 overflow-hidden flex w-full min-w-0 ${light ? "bg-white" : "bg-neutral-950"}`}>
       <TocSidebar entries={tocEntries} tocOpen={tocOpen} />
-      <div className="flex-1 overflow-y-auto w-full min-w-0">
+      <div className="flex-1 overflow-y-auto w-full min-w-0 doc-scroll relative">
         <div className="max-w-4xl mx-auto p-6 pb-32 w-full">
           {docTitle && docTitle.trim() && (
             <h1 className={`text-3xl md:text-4xl font-bold mb-6 ${light ? "text-neutral-900" : "text-white"}`}>
