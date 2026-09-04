@@ -10,7 +10,16 @@ interface Row { montant: string; creancier: string; echeance: string; }
 const PAY_DOC_ID = "f530ad97-d4c7-4ceb-90a7-d2e5a215c499"; // « Trucs à payer »
 
 function stripTags(html: string) {
-  return html.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+  // Les balises deviennent des espaces (sinon deux paragraphes se collent : « possiblerelance »)
+  return html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+}
+
+// Ne garde que le montant lui-même (ex. « 329,50 € ») ; le reste de la cellule est du commentaire
+function extractAmount(text: string): { montant: string; note: string } {
+  const m = text.match(/-?\d[\d\s .,]*€/);
+  if (!m) return { montant: text, note: "" };
+  const note = (text.slice(0, m.index) + text.slice((m.index || 0) + m[0].length)).replace(/^[+·:,-]\s*/, "").trim();
+  return { montant: m[0].replace(/\s+/g, " ").trim(), note };
 }
 
 // Extrait les lignes du 1er <table> : colonnes Montant / Créancier / … / Échéance
@@ -24,8 +33,8 @@ function parseRows(html: string): Row[] {
   table.querySelectorAll("tbody tr, tr").forEach((tr) => {
     const cells = Array.from(tr.querySelectorAll("td"));
     if (cells.length < 2) return; // ignore l'en-tête (th)
-    const montant = stripTags(cells[0].innerHTML);
-    const creancier = stripTags(cells[1].innerHTML).split("  ")[0];
+    const { montant } = extractAmount(stripTags(cells[0].innerHTML));
+    const creancier = stripTags(cells[1].innerHTML);
     // cherche une cellule qui ressemble à une échéance (date)
     let echeance = "";
     for (const c of cells) {
@@ -60,10 +69,12 @@ export default function UpcomingPayments() {
       </div>
       <div className="space-y-1.5">
         {rows.slice(0, 5).map((r, i) => (
-          <div key={i} className="flex items-center gap-3 text-sm">
-            <span className="font-semibold text-white tabular-nums shrink-0 w-20">{r.montant}</span>
+          <div key={i} className="flex items-center gap-2 text-sm min-w-0">
+            <span className="font-semibold text-white tabular-nums shrink-0 whitespace-nowrap">{r.montant}</span>
             <span className="flex-1 min-w-0 truncate text-neutral-300">{r.creancier}</span>
-            {r.echeance && <span className="text-xs text-neutral-500 shrink-0">{r.echeance}</span>}
+            {r.echeance && (
+              <span className="text-xs text-neutral-500 shrink min-w-0 max-w-[45%] truncate text-right">{r.echeance}</span>
+            )}
           </div>
         ))}
       </div>
