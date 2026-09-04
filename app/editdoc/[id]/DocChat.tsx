@@ -179,7 +179,7 @@ export default function DocChat({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-y-0 left-0 z-[9990] w-full sm:w-96 bg-neutral-950 border-r border-neutral-800 flex flex-col shadow-2xl">
+    <div className="fixed inset-y-0 left-0 z-[9990] w-full sm:w-[45vw] bg-neutral-950 border-r border-neutral-800 flex flex-col shadow-2xl">
       {/* En-tête */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-800 shrink-0">
         <Sparkles size={16} className="text-teal-400" />
