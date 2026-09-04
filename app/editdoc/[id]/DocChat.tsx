@@ -8,6 +8,7 @@ import { computeLineMap } from "./LineNumbers";
 
 interface Msg { role: "user" | "assistant"; text: string }
 interface Attachment { name: string; type: string; data: string; size: number }
+interface QueueItem { instruction: string; files: Attachment[] }
 
 const MAX_TOTAL_BYTES = 3 * 1024 * 1024; // limite Vercel (~4.5 Mo de body)
 
@@ -80,11 +81,22 @@ export default function DocChat({
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  // Nombre de prompts en attente derrière celui en cours de traitement
+  const [pending, setPending] = useState(0);
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [reading, setReading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // File d'attente des prompts : on peut envoyer pendant que l'IA travaille,
+  // chaque prompt est traité successivement dans l'ordre d'envoi.
+  const queueRef = useRef<QueueItem[]>([]);
+  const processingRef = useRef(false);
+  // Historique réel des échanges terminés (pour le contexte envoyé à l'API)
+  const historyRef = useRef<Msg[]>([]);
+  // Le modèle peut changer pendant qu'un prompt attend : on lit la valeur courante
+  const modelRef = useRef(model);
+  useEffect(() => { modelRef.current = model; }, [model]);
 
   async function addFiles(list: FileList | null) {
     if (!list || list.length === 0) return;
@@ -138,29 +150,22 @@ export default function DocChat({
     return () => window.removeEventListener("doc-line-click", handler);
   }, []);
 
-  async function send() {
-    const instruction = input.trim();
-    if (!instruction || loading) return;
-    setInput("");
-    const sentFiles = attachments;
-    setAttachments([]);
-    const shown = sentFiles.length ? instruction + "\n" + sentFiles.map((a) => `📎 ${a.name}`).join("\n") : instruction;
-    const nextMsgs: Msg[] = [...messages, { role: "user", text: shown }];
-    setMessages(nextMsgs);
-    setLoading(true);
+  // Traite un prompt : appel API avec le document DANS SON ÉTAT COURANT
+  // (donc après application des modifications des prompts précédents).
+  async function processOne(item: QueueItem) {
     try {
       const res = await authFetch("/api/doc-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          instruction,
+          instruction: item.instruction,
           html: getHtml(),
           title,
           description,
-          model,
-          lineMap: /ligne\s+\d+/i.test(instruction) ? computeLineMap() : undefined,
-          files: sentFiles.map(({ name, type, data }) => ({ name, type, data })),
-          history: messages.map((m) => ({ role: m.role, text: m.text })),
+          model: modelRef.current,
+          lineMap: /ligne\s+\d+/i.test(item.instruction) ? computeLineMap() : undefined,
+          files: item.files.map(({ name, type, data }) => ({ name, type, data })),
+          history: historyRef.current.map((m) => ({ role: m.role, text: m.text })),
         }),
       });
       const data = await res.json();
@@ -168,11 +173,45 @@ export default function DocChat({
       if (data.html) onApply(data.html);
       if (data.title && onTitle) onTitle(data.title);
       if (data.desc && onDesc) onDesc(data.desc);
-      setMessages((prev) => [...prev, { role: "assistant", text: data.reply || "Fait." }]);
+      const reply = data.reply || "Fait.";
+      const exchange: Msg[] = [{ role: "user", text: item.instruction }, { role: "assistant", text: reply }];
+      historyRef.current = [...historyRef.current, ...exchange].slice(-20);
+      setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
     } catch (e: any) {
       setMessages((prev) => [...prev, { role: "assistant", text: "⚠️ " + (e?.message || "Erreur") }]);
-    } finally {
-      setLoading(false);
+    }
+  }
+
+  // Vide la file : un prompt à la fois, dans l'ordre, jusqu'à épuisement.
+  async function processQueue() {
+    if (processingRef.current) return;
+    processingRef.current = true;
+    setLoading(true);
+    while (queueRef.current.length > 0) {
+      const item = queueRef.current.shift()!;
+      setPending(queueRef.current.length);
+      await processOne(item);
+    }
+    processingRef.current = false;
+    setLoading(false);
+    setPending(0);
+  }
+
+  // Envoi : toujours possible, même pendant qu'un prompt est en cours —
+  // le nouveau prompt est mis en attente et traité à son tour.
+  function send() {
+    const instruction = input.trim();
+    if (!instruction) return;
+    setInput("");
+    const sentFiles = attachments;
+    setAttachments([]);
+    const shown = sentFiles.length ? instruction + "\n" + sentFiles.map((a) => `📎 ${a.name}`).join("\n") : instruction;
+    setMessages((prev) => [...prev, { role: "user", text: shown }]);
+    queueRef.current.push({ instruction, files: sentFiles });
+    if (processingRef.current) {
+      setPending(queueRef.current.length);
+    } else {
+      processQueue();
     }
   }
 
@@ -213,7 +252,15 @@ export default function DocChat({
         ))}
         {loading && (
           <div className="flex items-center gap-2 text-sm text-neutral-500">
-            <Loader2 size={14} className="animate-spin" /> L’IA travaille sur le document…
+            <Loader2 size={14} className="animate-spin" />
+            <span>
+              L’IA travaille sur le document…
+              {pending > 0 && (
+                <span className="ml-2 inline-flex items-center rounded-full bg-teal-600/20 border border-teal-500/40 px-2 py-0.5 text-[11px] font-semibold text-teal-300">
+                  {pending} prompt{pending > 1 ? "s" : ""} en attente
+                </span>
+              )}
+            </span>
           </div>
         )}
         <div ref={bottomRef} />
@@ -258,7 +305,7 @@ export default function DocChat({
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
             }}
             rows={2}
-            placeholder="Que faire sur ce document ?"
+            placeholder={loading ? "Prompt suivant (mis en attente)…" : "Que faire sur ce document ?"}
             className="flex-1 resize-none bg-neutral-900 border border-neutral-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-teal-500 placeholder:text-neutral-600"
           />
           <button
@@ -271,7 +318,7 @@ export default function DocChat({
           </button>
           <button
             onClick={send}
-            disabled={loading || !input.trim()}
+            disabled={!input.trim()}
             className="p-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white disabled:opacity-40 transition-colors shrink-0"
           >
             <Send size={16} />
