@@ -99,22 +99,33 @@ export default function DocChat({
   useEffect(() => { modelRef.current = model; }, [model]);
 
   async function addFiles(list: FileList | null) {
-    if (!list || list.length === 0) return;
+    if (!list || list.length === 0) {
+      toast("Aucun fichier sélectionné.");
+      return;
+    }
+    // Capture immédiate : la liste peut être invalidée quand l'input est réinitialisé
+    const files = Array.from(list);
     setReading(true);
+    let added = 0;
     try {
       const next = [...attachments];
-      for (const file of Array.from(list)) {
-        const att = await fileToAttachment(file);
-        const total = next.reduce((s, a) => s + a.size, 0) + att.size;
-        if (total > MAX_TOTAL_BYTES) {
-          toast(`« ${file.name} » dépasse la limite d'envoi (3 Mo au total). Retire une pièce ou choisis un fichier plus léger.`);
-          continue;
+      for (const file of files) {
+        try {
+          const att = await fileToAttachment(file);
+          const total = next.reduce((s, a) => s + a.size, 0) + att.size;
+          if (total > MAX_TOTAL_BYTES) {
+            toast(`« ${file.name} » dépasse la limite d'envoi (3 Mo au total). Retire une pièce ou choisis un fichier plus léger.`);
+            continue;
+          }
+          next.push(att);
+          added++;
+        } catch (err) {
+          console.error("Lecture impossible :", file.name, err);
+          toast(`Impossible de lire « ${file.name} ».`);
         }
-        next.push(att);
       }
       setAttachments(next.slice(0, 6));
-    } catch {
-      toast("Impossible de lire un des fichiers.");
+      if (added > 0) toast(`📎 ${added} fichier${added > 1 ? "s" : ""} ajouté${added > 1 ? "s" : ""} — il partira avec ton prochain message.`);
     } finally {
       setReading(false);
     }
@@ -283,9 +294,13 @@ export default function DocChat({
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".pdf,.docx,.pptx,.txt,.md,image/*"
+          accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx,text/plain,.txt,text/markdown,.md,image/*"
           className="hidden"
-          onChange={(e) => { addFiles(e.target.files); e.currentTarget.value = ""; }}
+          onChange={async (e) => {
+            const input = e.currentTarget;
+            await addFiles(input.files);
+            input.value = "";
+          }}
         />
         <select
           value={model}
