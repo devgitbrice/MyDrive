@@ -15,17 +15,22 @@ function getCurrentFolderIdFromCookie(): string | null {
   return v;
 }
 
-export async function createMyDriveRow(input: CreateRowInput) {
+export async function createMyDriveRow(input: CreateRowInput): Promise<string> {
   const parentId = getCurrentFolderIdFromCookie();
-  const { error } = await supabase.from("MyDrive").insert({
-    title: input.title,
-    observation: input.observation,
-    image_path: input.imagePath,
-    image_url: input.imageUrl,
-    parent_id: parentId,
-  });
+  const { data, error } = await supabase
+    .from("MyDrive")
+    .insert({
+      title: input.title,
+      observation: input.observation,
+      image_path: input.imagePath,
+      image_url: input.imageUrl,
+      parent_id: parentId,
+    })
+    .select("id")
+    .single();
 
   if (error) {
     throw new Error(`DB insert failed: ${error.message}`);
   }
+  return data.id as string;
 }

@@ -6,6 +6,19 @@ import { useRouter } from "next/navigation";
 import { useNewItemStore } from "@/store/newItemStore";
 import { uploadToMyDrive } from "@/lib/uploadToMyDrive";
 import { createMyDriveRow } from "@/lib/createMyDriveRow";
+import { supabase } from "@/lib/supabaseClient";
+import { authFetch } from "@/lib/authFetch";
+import { createTagAction, addTagToItemAction } from "@/features/mydrive/modify";
+
+// Lit un File en base64 (sans le préfixe data:)
+async function fileToBase64(file: File): Promise<string> {
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  return btoa(bin);
+}
 
 function getCurrentFolderIdFromCookie(): string | null {
   if (typeof document === "undefined") return null;
@@ -39,6 +52,11 @@ export default function AddPage() {
   const [progress, setProgress] = useState(0); // current file %
   const [batchIndex, setBatchIndex] = useState(0); // index dans photos
   const [batchPrefix, setBatchPrefix] = useState("");
+  // Description IA : état + mots-clés proposés (rattachés à l'enregistrement)
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiTags, setAiTags] = useState<string[]>([]);
+  const [existingTagNames, setExistingTagNames] = useState<Set<string>>(new Set());
 
   const previewUrl = useMemo(() => {
     if (!photo) return null;
@@ -235,6 +253,37 @@ export default function AddPage() {
   // ================================================================
   // MODE SINGLE (1 fichier) — flow original avec titre + observation
   // ================================================================
+
+  // Description IA : ~100 mots + mots-clés (réutilise les tags existants en priorité)
+  async function handleAiDescribe() {
+    if (!photo || aiLoading) return;
+    setAiError(null);
+    if (photo.size > 3.5 * 1024 * 1024) {
+      setAiError("Fichier trop lourd pour l'analyse IA (~3,5 Mo max).");
+      return;
+    }
+    setAiLoading(true);
+    try {
+      const { data: tagRows } = await supabase.from("tags").select("name");
+      const names = (tagRows || []).map((t: { name: string }) => String(t.name));
+      setExistingTagNames(new Set(names.map((n) => n.toLowerCase())));
+      const b64 = await fileToBase64(photo);
+      const res = await authFetch("/api/describe-file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: photo.name, type: photo.type, data: b64, existingTags: names }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur de l'analyse IA");
+      setObservation(data.description);
+      setAiTags(Array.isArray(data.tags) ? data.tags : []);
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : "Erreur de l'analyse IA");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   async function handleFinalize() {
     try {
       const currentPhoto = photo;
@@ -256,12 +305,22 @@ export default function AddPage() {
         setProgress(pct);
       });
 
-      await createMyDriveRow({
+      const rowId = await createMyDriveRow({
         title: cleanTitle,
         observation: cleanObs,
         imagePath,
         imageUrl: publicUrl,
       });
+
+      // Rattache les mots-clés proposés par l'IA (réutilise le tag existant, sinon le crée)
+      for (const name of aiTags) {
+        try {
+          const tag = await createTagAction(name);
+          if (tag?.id) await addTagToItemAction(rowId, tag.id);
+        } catch (err) {
+          console.error("Tag non rattaché :", name, err);
+        }
+      }
 
       setStatus("success");
     } catch (e) {
@@ -302,6 +361,41 @@ export default function AddPage() {
               value={observation}
               onChange={(e) => setObservation(e.target.value)}
             />
+
+            <button
+              type="button"
+              disabled={aiLoading}
+              onClick={handleAiDescribe}
+              className="w-full rounded-2xl px-6 py-3 font-semibold border border-teal-500/60 text-teal-400 hover:bg-teal-500/10 disabled:opacity-50 transition-colors"
+            >
+              {aiLoading ? "✨ Analyse du document en cours…" : "✨ Description IA (100 mots + mots-clés)"}
+            </button>
+            {aiError && <p className="text-sm text-red-400">{aiError}</p>}
+
+            {aiTags.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs opacity-70">Mots-clés (rattachés à l’enregistrement — touche pour retirer) :</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {aiTags.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setAiTags((prev) => prev.filter((x) => x !== t))}
+                      title="Retirer ce mot-clé"
+                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs border ${
+                        existingTagNames.has(t.toLowerCase())
+                          ? "border-green-500/50 text-green-400 bg-green-500/10"
+                          : "border-blue-500/50 text-blue-400 bg-blue-500/10"
+                      }`}
+                    >
+                      #{t}
+                      {!existingTagNames.has(t.toLowerCase()) && <span className="opacity-60">(nouveau)</span>}
+                      <span className="opacity-60">×</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <button
               type="button"
