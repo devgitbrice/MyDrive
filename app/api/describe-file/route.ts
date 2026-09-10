@@ -70,7 +70,8 @@ export async function POST(req: NextRequest) {
 
     const system =
       "Tu analyses un document pour la GED personnelle de l'utilisateur. Réponds UNIQUEMENT en JSON strict : " +
-      '{"description": "...", "tags": ["...", "..."]}. ' +
+      '{"title": "...", "description": "...", "tags": ["...", "..."]}. ' +
+      "title : un titre explicite et court (4 à 10 mots, en français) qui permet de retrouver le document d'un coup d'œil — type de document + objet + partie/date si pertinent (ex. « Requête en divorce Matter c. Roy — mai 2026 »). Pas de guillemets ni d'extension de fichier. " +
       "description : environ 100 mots, en français, factuelle (nature du document, parties/personnes, objet, dates et montants importants). " +
       "tags : 3 à 6 mots-clés en minuscules. RÈGLE IMPORTANTE : réutilise en priorité les mots-clés EXISTANTS fournis quand ils correspondent au contenu (reprends-les à l'identique), et n'ajoute de nouveaux mots-clés courts (1-2 mots) que si nécessaire. " +
       (tags.length ? `Mots-clés existants : ${tags.join(", ")}` : "Aucun mot-clé existant pour l'instant.");
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
     const out = await res.json();
     const text: string = out.choices?.[0]?.message?.content || "";
     const jsonStr = text.replace(/```json|```/g, "").trim();
-    let parsed: { description?: string; tags?: string[] } = {};
+    let parsed: { title?: string; description?: string; tags?: string[] } = {};
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
@@ -117,8 +118,9 @@ export async function POST(req: NextRequest) {
       .filter(Boolean)
       .slice(0, 6);
     if (!description) return NextResponse.json({ error: "Réponse IA inexploitable." }, { status: 502 });
+    const title = String(parsed.title || "").trim().slice(0, 150);
 
-    return NextResponse.json({ description, tags: outTags });
+    return NextResponse.json({ title, description, tags: outTags });
   } catch (e) {
     console.error("describe-file error:", e);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

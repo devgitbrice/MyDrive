@@ -276,6 +276,7 @@ export default function AddPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erreur de l'analyse IA");
       setObservation(data.description);
+      if (data.title) setTitle(data.title);
       setAiTags(Array.isArray(data.tags) ? data.tags : []);
     } catch (e) {
       setAiError(e instanceof Error ? e.message : "Erreur de l'analyse IA");
@@ -371,6 +372,13 @@ export default function AddPage() {
               {aiLoading ? "✨ Analyse du document en cours…" : "✨ Description IA (100 mots + mots-clés)"}
             </button>
             {aiError && <p className="text-sm text-red-400">{aiError}</p>}
+
+            {title.trim() && (
+              <p className="text-sm opacity-80">
+                <span className="opacity-60">Titre proposé :</span> <span className="font-medium">{title}</span>
+                <span className="opacity-60"> — modifiable à l’étape suivante</span>
+              </p>
+            )}
 
             {aiTags.length > 0 && (
               <div className="space-y-1.5">
