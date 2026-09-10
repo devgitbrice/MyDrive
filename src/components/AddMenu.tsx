@@ -141,20 +141,29 @@ export default function AddMenu() {
         multiple
         style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 }}
         onChange={(e) => {
-          const files = Array.from(e.target.files || []);
+          // Capture le DOM node tout de suite : e.currentTarget est null dans un
+          // callback asynchrone (React détache l'événement), ce qui faisait
+          // échouer silencieusement toute la suite (aucune navigation).
+          const input = e.currentTarget;
+          const files = Array.from(input.files || []);
           if (files.length === 0) return;
           // reuse newItemStore
-          import("@/store/newItemStore").then(({ useNewItemStore }) => {
-            const st = useNewItemStore.getState();
-            if (files.length > 1 && typeof (st as any).setPhotos === "function") {
-              (st as any).setPhotos(files);
-            } else {
-              (st as any).setPhoto(files[0]);
-            }
-            e.currentTarget.value = "";
-            closeMenu();
-            router.push("/add");
-          });
+          import("@/store/newItemStore")
+            .then(({ useNewItemStore }) => {
+              const st = useNewItemStore.getState();
+              if (files.length > 1 && typeof (st as any).setPhotos === "function") {
+                (st as any).setPhotos(files);
+              } else {
+                (st as any).setPhoto(files[0]);
+              }
+              input.value = "";
+              closeMenu();
+              router.push("/add");
+            })
+            .catch((err) => {
+              console.error("Ajout de fichier impossible :", err);
+              toast("Impossible de charger ce fichier.");
+            });
         }}
       />
 

@@ -277,12 +277,20 @@ export default function AddPage() {
           <h1 className="text-2xl font-semibold">Ajout d’un document</h1>
         </header>
 
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={previewUrl ?? ""}
-          alt="Prévisualisation"
-          className="w-full rounded-2xl border"
-        />
+        {photo && !photo.type.startsWith("image/") ? (
+          <div className="w-full rounded-2xl border p-8 text-center space-y-1">
+            <div className="text-4xl">📄</div>
+            <div className="font-medium break-all">{photo.name}</div>
+            <div className="text-xs opacity-60">{Math.round(photo.size / 1024)} Ko — sera enregistré tel quel</div>
+          </div>
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={previewUrl ?? ""}
+            alt="Prévisualisation"
+            className="w-full rounded-2xl border"
+          />
+        )}
 
         {status === "observation" && (
           <section className="space-y-4">
