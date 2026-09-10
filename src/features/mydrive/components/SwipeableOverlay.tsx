@@ -5,6 +5,7 @@ import { toast } from "@/components/Toaster";
 import type { MyDriveItem, Tag } from "@/features/mydrive/types";
 import ImageEditor from "./ImageEditor";
 import TagSelector from "./TagSelector";
+import PdfViewer from "./PdfViewer";
 import { updateDriveItemAction, updateDriveContentAction } from "@/features/mydrive/modify";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -113,6 +114,10 @@ export default function SwipeableOverlay({
     if (isRightSwipe) goPrev();
   };
 
+  // Quand un PDF est affiché, ← / → tournent ses pages (gérées par PdfViewer),
+  // pas la navigation entre documents (qui reste possible via les boutons à l'écran).
+  const pdfMode = isPdf(currentItem?.image_url);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isEditingTitle || isEditingObs || isEditingContent) {
@@ -123,13 +128,13 @@ export default function SwipeableOverlay({
         }
         return;
       }
-      if (e.key === "ArrowRight") goNext();
-      if (e.key === "ArrowLeft") goPrev();
+      if (!pdfMode && e.key === "ArrowRight") goNext();
+      if (!pdfMode && e.key === "ArrowLeft") goPrev();
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [goNext, goPrev, onClose, isEditingTitle, isEditingObs, isEditingContent]);
+  }, [goNext, goPrev, onClose, isEditingTitle, isEditingObs, isEditingContent, pdfMode]);
 
   const saveTitle = () => {
     setIsEditingTitle(false);
@@ -241,6 +246,10 @@ export default function SwipeableOverlay({
           </div>
         </div>
       );
+    }
+
+    if (validUrl && isPdf(validUrl)) {
+      return <PdfViewer url={validUrl} />;
     }
 
     if (validUrl) {

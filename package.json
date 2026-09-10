@@ -25,6 +25,7 @@
     "lucide-react": "^0.564.0",
     "mammoth": "^1.12.2",
     "next": "16.1.4",
+    "pdfjs-dist": "^6.3.289",
     "pptxgenjs": "^4.0.1",
     "react": "19.2.3",
     "react-datasheet-grid": "^4.11.5",
