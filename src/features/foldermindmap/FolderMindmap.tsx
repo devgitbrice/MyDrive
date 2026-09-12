@@ -9,6 +9,7 @@ import ReactFlow, {
   useEdgesState,
   Node,
   Edge,
+  Position,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import Link from "next/link";
@@ -22,6 +23,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string; bg: string }> 
   presentation: { label: "Présentations",  color: "#f97316", bg: "#2c1000" },
   voyage:       { label: "Voyages",        color: "#14b8a6", bg: "#012a29" },
   python:       { label: "Python",         color: "#eab308", bg: "#1c1200" },
+  fiche:        { label: "Fiches",         color: "#ec4899", bg: "#2d0a1e" },
 };
 
 function getItemUrl(item: MyDriveItem): string {
@@ -37,12 +39,12 @@ function getItemUrl(item: MyDriveItem): string {
   }
 }
 
-const ITEM_GAP   = 68;  // px entre items verticalement
-const TYPE_GAP   = 28;  // px entre groupes
-const TYPE_H     = 44;  // hauteur d'un nœud type fermé
-const COL_ROOT   = 0;
-const COL_TYPE   = 340;
-const COL_ITEM   = 680;
+const ITEM_GAP = 60;
+const TYPE_GAP = 40;
+const TYPE_H   = 44;
+const COL_ROOT = 0;
+const COL_TYPE = 280;
+const COL_ITEM = 560;
 
 function buildGraph(
   items: MyDriveItem[],
@@ -51,7 +53,6 @@ function buildGraph(
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
-  // Grouper les items par type
   const groups: Record<string, MyDriveItem[]> = {};
   for (const item of items) {
     const key = item.doc_type || item.type || "scan";
@@ -60,7 +61,6 @@ function buildGraph(
   }
   const types = Object.keys(groups);
 
-  // Hauteur de chaque slot selon l'état ouvert/fermé
   const slotHeights = types.map((t) =>
     expandedTypes.has(t)
       ? Math.max(TYPE_H, groups[t].length * ITEM_GAP)
@@ -69,10 +69,12 @@ function buildGraph(
   const totalHeight =
     slotHeights.reduce((a, b) => a + b, 0) + TYPE_GAP * (types.length - 1);
 
-  // Nœud racine
+  // Nœud racine — connexions droite sortante
   nodes.push({
     id: "root",
     position: { x: COL_ROOT, y: totalHeight / 2 - 55 },
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
     data: { label: "MyDrive" },
     style: {
       background: "#166534",
@@ -100,25 +102,23 @@ function buildGraph(
     const isOpen = expandedTypes.has(type);
     const arrow = isOpen ? "▼" : "▶";
 
+    // Nœud type — connexions gauche entrante, droite sortante
     nodes.push({
       id: typeId,
       position: { x: COL_TYPE, y: typeCenterY - TYPE_H / 2 },
-      data: {
-        label: `${arrow} ${cfg.label} (${groups[type].length})`,
-        typeKey: type,
-        isFolder: true,
-      },
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+      data: { label: `${arrow} ${cfg.label} (${groups[type].length})`, typeKey: type, isFolder: true },
       style: {
         background: cfg.bg,
         color: cfg.color,
-        border: `2px solid ${isOpen ? cfg.color : cfg.color + "88"}`,
+        border: `2px solid ${isOpen ? cfg.color : cfg.color + "99"}`,
         borderRadius: 12,
         padding: "8px 18px",
         fontWeight: 700,
         fontSize: 13,
         whiteSpace: "nowrap",
         cursor: "pointer",
-        transition: "border-color 0.2s",
       },
     });
 
@@ -127,10 +127,9 @@ function buildGraph(
       source: "root",
       target: typeId,
       type: "smoothstep",
-      style: { stroke: cfg.color + (isOpen ? "ff" : "88"), strokeWidth: isOpen ? 2 : 1.5 },
+      style: { stroke: cfg.color + (isOpen ? "ff" : "99"), strokeWidth: isOpen ? 2 : 1.5 },
     });
 
-    // Items visibles seulement si le dossier est ouvert
     if (isOpen) {
       const typeItems = groups[type];
       const itemsHeight = (typeItems.length - 1) * ITEM_GAP;
@@ -140,11 +139,13 @@ function buildGraph(
         const iy = itemsStartY + ii * ITEM_GAP;
         const itemId = `item-${item.id}`;
         const url = getItemUrl(item);
-        const label = item.title.length > 32 ? item.title.slice(0, 29) + "…" : item.title;
+        const label = item.title.length > 34 ? item.title.slice(0, 31) + "…" : item.title;
 
         nodes.push({
           id: itemId,
           position: { x: COL_ITEM, y: iy - 18 },
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
           data: { label, url },
           style: {
             background: "#111827",
@@ -183,7 +184,6 @@ export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(computed);
   const [edges, setEdges, onEdgesChange] = useEdgesState(computedEdges);
 
-  // Sync when expandedTypes changes (re-layout)
   useEffect(() => {
     setNodes(computed);
     setEdges(computedEdges);
@@ -191,7 +191,6 @@ export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     if (node.data?.isFolder) {
-      // Ouvrir / fermer le dossier
       const key = node.data.typeKey as string;
       setExpandedTypes((prev) => {
         const next = new Set(prev);
@@ -199,7 +198,6 @@ export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
         return next;
       });
     } else if (node.data?.url) {
-      // Ouvrir l'item dans une nouvelle fenêtre
       window.open(node.data.url as string, "_blank");
     }
   }, []);
@@ -213,8 +211,8 @@ export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.05}
+        fitViewOptions={{ padding: 0.15 }}
+        minZoom={0.04}
         maxZoom={4}
         proOptions={{ hideAttribution: true }}
       >
@@ -233,7 +231,6 @@ export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
         />
       </ReactFlow>
 
-      {/* Barre du haut */}
       <div
         style={{
           position: "absolute",
@@ -264,7 +261,7 @@ export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
           ← MyDrive
         </Link>
         <span style={{ color: "#6b7280", fontSize: 12, userSelect: "none" }}>
-          Cliquer un dossier pour l&apos;ouvrir · Cliquer un item pour l&apos;éditer
+          Cliquer un dossier ▶ pour l&apos;ouvrir · Cliquer un item pour l&apos;éditer
         </span>
       </div>
     </div>
