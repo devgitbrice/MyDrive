@@ -296,7 +296,7 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
   // Hover sur dossier → bouton S
   const [folderHoverId, setFolderHoverId] = useState<string | null>(null);
   const [soloBtnPos, setSoloBtnPos] = useState<{ x: number; y: number } | null>(null);
-  const hideTimer = useRef<ReturnType<typeof setTimeout>>();
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const refetch = useCallback(async () => {
     try { setItems(await fetchMyDrive()); } catch {}
