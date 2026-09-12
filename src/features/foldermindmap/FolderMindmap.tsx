@@ -427,6 +427,11 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
     return () => cancelAnimationFrame(raf);
   }, [folderHoverId]);
 
+  const handleFolderAdd = useCallback((folderId: string) => {
+    setCreateInFolder(folderId);
+    setShowCreate(true);
+  }, []);
+
   const { nodes: cNodes, edges: cEdges } = useMemo(
     () => buildGraph(roots, expanded, hovered, T as typeof JOUR, soloFolder, handleFolderAdd),
     [roots, expanded, hovered, T, soloFolder, handleFolderAdd],
@@ -471,11 +476,6 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
       // Au retour de focus, refetch pour voir le nouvel item
     }
   }, [refetch]);
-
-  const handleFolderAdd = useCallback((folderId: string) => {
-    setCreateInFolder(folderId);
-    setShowCreate(true);
-  }, []);
 
   // Hover sur dossier → afficher bouton S
   const onNodeMouseEnter = useCallback((_: React.MouseEvent, node: Node) => {
