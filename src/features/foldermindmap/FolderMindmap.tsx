@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -37,30 +37,39 @@ function getItemUrl(item: MyDriveItem): string {
   }
 }
 
-const ITEM_GAP = 72;   // px entre deux items verticalement
-const TYPE_GAP = 32;   // px entre deux groupes de types
-const COL_ROOT = 0;
-const COL_TYPE = 360;
-const COL_ITEM = 720;
+const ITEM_GAP   = 68;  // px entre items verticalement
+const TYPE_GAP   = 28;  // px entre groupes
+const TYPE_H     = 44;  // hauteur d'un nœud type fermé
+const COL_ROOT   = 0;
+const COL_TYPE   = 340;
+const COL_ITEM   = 680;
 
-function buildGraph(items: MyDriveItem[]): { nodes: Node[]; edges: Edge[] } {
+function buildGraph(
+  items: MyDriveItem[],
+  expandedTypes: Set<string>,
+): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
+  // Grouper les items par type
   const groups: Record<string, MyDriveItem[]> = {};
   for (const item of items) {
     const key = item.doc_type || item.type || "scan";
     if (!groups[key]) groups[key] = [];
     groups[key].push(item);
   }
-
   const types = Object.keys(groups);
 
-  // Calcul de la hauteur de chaque slot de type
-  const slotHeights = types.map((t) => Math.max(ITEM_GAP, groups[t].length * ITEM_GAP));
-  const totalHeight = slotHeights.reduce((a, b) => a + b, 0) + TYPE_GAP * (types.length - 1);
+  // Hauteur de chaque slot selon l'état ouvert/fermé
+  const slotHeights = types.map((t) =>
+    expandedTypes.has(t)
+      ? Math.max(TYPE_H, groups[t].length * ITEM_GAP)
+      : TYPE_H
+  );
+  const totalHeight =
+    slotHeights.reduce((a, b) => a + b, 0) + TYPE_GAP * (types.length - 1);
 
-  // Nœud racine centré verticalement
+  // Nœud racine
   nodes.push({
     id: "root",
     position: { x: COL_ROOT, y: totalHeight / 2 - 55 },
@@ -88,20 +97,28 @@ function buildGraph(items: MyDriveItem[]): { nodes: Node[]; edges: Edge[] } {
 
     const cfg = TYPE_CONFIG[type] ?? { label: type, color: "#6b7280", bg: "#1f2937" };
     const typeId = `type-${type}`;
+    const isOpen = expandedTypes.has(type);
+    const arrow = isOpen ? "▼" : "▶";
 
     nodes.push({
       id: typeId,
-      position: { x: COL_TYPE, y: typeCenterY - 22 },
-      data: { label: `${cfg.label} (${groups[type].length})` },
+      position: { x: COL_TYPE, y: typeCenterY - TYPE_H / 2 },
+      data: {
+        label: `${arrow} ${cfg.label} (${groups[type].length})`,
+        typeKey: type,
+        isFolder: true,
+      },
       style: {
         background: cfg.bg,
         color: cfg.color,
-        border: `2px solid ${cfg.color}`,
+        border: `2px solid ${isOpen ? cfg.color : cfg.color + "88"}`,
         borderRadius: 12,
         padding: "8px 18px",
         fontWeight: 700,
         fontSize: 13,
         whiteSpace: "nowrap",
+        cursor: "pointer",
+        transition: "border-color 0.2s",
       },
     });
 
@@ -110,55 +127,79 @@ function buildGraph(items: MyDriveItem[]): { nodes: Node[]; edges: Edge[] } {
       source: "root",
       target: typeId,
       type: "smoothstep",
-      style: { stroke: cfg.color, strokeWidth: 2 },
+      style: { stroke: cfg.color + (isOpen ? "ff" : "88"), strokeWidth: isOpen ? 2 : 1.5 },
     });
 
-    const typeItems = groups[type];
-    const itemsHeight = (typeItems.length - 1) * ITEM_GAP;
-    const itemsStartY = typeCenterY - itemsHeight / 2;
+    // Items visibles seulement si le dossier est ouvert
+    if (isOpen) {
+      const typeItems = groups[type];
+      const itemsHeight = (typeItems.length - 1) * ITEM_GAP;
+      const itemsStartY = typeCenterY - itemsHeight / 2;
 
-    typeItems.forEach((item, ii) => {
-      const iy = itemsStartY + ii * ITEM_GAP;
-      const itemId = `item-${item.id}`;
-      const url = getItemUrl(item);
-      const label = item.title.length > 30 ? item.title.slice(0, 27) + "…" : item.title;
+      typeItems.forEach((item, ii) => {
+        const iy = itemsStartY + ii * ITEM_GAP;
+        const itemId = `item-${item.id}`;
+        const url = getItemUrl(item);
+        const label = item.title.length > 32 ? item.title.slice(0, 29) + "…" : item.title;
 
-      nodes.push({
-        id: itemId,
-        position: { x: COL_ITEM, y: iy - 18 },
-        data: { label, url },
-        style: {
-          background: "#111827",
-          color: "#e5e7eb",
-          border: `1px solid ${cfg.color}66`,
-          borderRadius: 8,
-          padding: "6px 14px",
-          fontSize: 12,
-          cursor: "pointer",
-          whiteSpace: "nowrap",
-        },
+        nodes.push({
+          id: itemId,
+          position: { x: COL_ITEM, y: iy - 18 },
+          data: { label, url },
+          style: {
+            background: "#111827",
+            color: "#e5e7eb",
+            border: `1px solid ${cfg.color}66`,
+            borderRadius: 8,
+            padding: "6px 14px",
+            fontSize: 12,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          },
+        });
+
+        edges.push({
+          id: `e-${typeId}-${itemId}`,
+          source: typeId,
+          target: itemId,
+          type: "smoothstep",
+          style: { stroke: `${cfg.color}88`, strokeWidth: 1 },
+        });
       });
-
-      edges.push({
-        id: `e-${typeId}-${itemId}`,
-        source: typeId,
-        target: itemId,
-        type: "smoothstep",
-        style: { stroke: `${cfg.color}66`, strokeWidth: 1 },
-      });
-    });
+    }
   });
 
   return { nodes, edges };
 }
 
 export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
-  const { nodes: initNodes, edges: initEdges } = useMemo(() => buildGraph(items), [items]);
-  const [nodes, , onNodesChange] = useNodesState(initNodes);
-  const [edges, , onEdgesChange] = useEdgesState(initEdges);
+  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
+
+  const { nodes: computed, edges: computedEdges } = useMemo(
+    () => buildGraph(items, expandedTypes),
+    [items, expandedTypes],
+  );
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(computed);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(computedEdges);
+
+  // Sync when expandedTypes changes (re-layout)
+  useEffect(() => {
+    setNodes(computed);
+    setEdges(computedEdges);
+  }, [computed, computedEdges, setNodes, setEdges]);
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    if (node.data?.url) {
+    if (node.data?.isFolder) {
+      // Ouvrir / fermer le dossier
+      const key = node.data.typeKey as string;
+      setExpandedTypes((prev) => {
+        const next = new Set(prev);
+        next.has(key) ? next.delete(key) : next.add(key);
+        return next;
+      });
+    } else if (node.data?.url) {
+      // Ouvrir l'item dans une nouvelle fenêtre
       window.open(node.data.url as string, "_blank");
     }
   }, []);
@@ -172,7 +213,7 @@ export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
         fitView
-        fitViewOptions={{ padding: 0.15 }}
+        fitViewOptions={{ padding: 0.2 }}
         minZoom={0.05}
         maxZoom={4}
         proOptions={{ hideAttribution: true }}
@@ -192,6 +233,7 @@ export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
         />
       </ReactFlow>
 
+      {/* Barre du haut */}
       <div
         style={{
           position: "absolute",
@@ -222,7 +264,7 @@ export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
           ← MyDrive
         </Link>
         <span style={{ color: "#6b7280", fontSize: 12, userSelect: "none" }}>
-          Déplacer : glisser le canvas · Ouvrir : cliquer sur un item
+          Cliquer un dossier pour l&apos;ouvrir · Cliquer un item pour l&apos;éditer
         </span>
       </div>
     </div>
