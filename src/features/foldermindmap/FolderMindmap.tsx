@@ -10,7 +10,7 @@ import "reactflow/dist/style.css";
 import Link from "next/link";
 import type { MyDriveItem } from "@/features/mydrive/types";
 import { fetchMyDrive } from "@/features/mydrive/lib/fetchMyDrive";
-import { moveItem, createFolder } from "@/features/mydrive/lib/folders";
+import { moveItem, createFolder, createLinkItem } from "@/features/mydrive/lib/folders";
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
 const FOLDER_COLORS = [
@@ -25,6 +25,7 @@ const CREATE_OPTIONS = [
   { label: "📊 Table",         url: "/newtable" },
   { label: "📽 Présentation",  url: "/newpresentation" },
   { label: "🐍 Script Python", url: "/newpython" },
+  { label: "🔗 Lien / URL",    url: "__link__" },
 ];
 
 // JOUR  = fond noir, texte/contours blancs
@@ -59,13 +60,14 @@ function getItemUrl(item: MyDriveItem): string {
     case "presentation": return `/editpresentation/${item.id}`;
     case "voyage":       return `/editvoyage/${item.id}`;
     case "python":       return `/editpython/${item.id}`;
+    case "link":         return item.observation?.trim() || "#";
     default:             return `/mydrive`;
   }
 }
 function docLabel(item: MyDriveItem): string {
   const icons: Record<string, string> = {
     scan:"🖼", doc:"📄", mindmap:"🧠", table:"📊",
-    presentation:"📽", voyage:"✈️", python:"🐍", fiche:"🗂",
+    presentation:"📽", voyage:"✈️", python:"🐍", fiche:"🗂", link:"🔗",
   };
   return `${icons[item.doc_type ?? item.type ?? ""] ?? "📁"} ${item.title}`;
 }
@@ -471,9 +473,13 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
       const name = window.prompt("Nom du dossier :");
       if (!name?.trim()) return;
       try { await createFolder(name.trim(), folderId); await refetch(); } catch (e) { console.error(e); }
+    } else if (url === "__link__") {
+      const href = window.prompt("URL du lien (ex: https://…) :");
+      if (!href?.trim()) return;
+      const title = window.prompt("Titre du lien :") || href.trim();
+      try { await createLinkItem(title.trim(), href.trim(), folderId); await refetch(); } catch (e) { console.error(e); }
     } else {
       window.open(url, "_blank");
-      // Au retour de focus, refetch pour voir le nouvel item
     }
   }, [refetch]);
 

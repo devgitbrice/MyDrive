@@ -32,6 +32,22 @@ export async function deleteFolder(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+export async function createLinkItem(title: string, url: string, parentId: string | null): Promise<void> {
+  const { error } = await supabase
+    .from("MyDrive")
+    .insert({
+      title,
+      type: "file",
+      doc_type: "link",
+      image_path: "",
+      image_url: "",
+      observation: url,
+      content: "",
+      parent_id: parentId,
+    });
+  if (error) throw new Error(error.message);
+}
+
 export async function moveItem(id: string, parentId: string | null): Promise<void> {
   const { error } = await supabase.from("MyDrive").update({ parent_id: parentId }).eq("id", id);
   if (error) throw new Error(error.message);
