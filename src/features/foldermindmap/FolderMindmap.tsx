@@ -362,8 +362,13 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
   }, []);
 
   useEffect(() => {
+    const onVisible = () => { if (!document.hidden) refetch(); };
     window.addEventListener("focus", refetch);
-    return () => window.removeEventListener("focus", refetch);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", refetch);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [refetch]);
 
   const allRoots = useMemo(() => buildRoots(items), [items]);
