@@ -477,7 +477,7 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
       const href = window.prompt("URL du lien (ex: https://…) :");
       if (!href?.trim()) return;
       const title = window.prompt("Titre du lien :") || href.trim();
-      try { await createLinkItem(title.trim(), href.trim(), folderId); await refetch(); } catch (e) { console.error(e); }
+      try { await createLinkItem(title.trim(), href.trim(), folderId); await refetch(); } catch (e) { console.error(e); alert("Erreur création lien : " + (e as Error).message); }
     } else {
       window.open(url, "_blank");
     }
