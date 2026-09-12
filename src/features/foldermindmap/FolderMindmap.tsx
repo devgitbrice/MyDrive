@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import ReactFlow, {
   Background, Controls, MiniMap,
   useNodesState, useEdgesState,
@@ -287,8 +287,16 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
   const [hovered, setHovered] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [createInFolder, setCreateInFolder] = useState<string | null>(null);
-  const [isJour, setIsJour] = useState(true); // Jour = fond noir / Nuit = fond blanc
+  const [isJour, setIsJour] = useState(true);
   const T = isJour ? JOUR : NUIT;
+
+  // Solo mode
+  const [soloFolder, setSoloFolder] = useState<string | null>(null);
+  const [soloFolderName, setSoloFolderName] = useState<string>("");
+  // Hover sur dossier → bouton S
+  const [folderHoverId, setFolderHoverId] = useState<string | null>(null);
+  const [soloBtnPos, setSoloBtnPos] = useState<{ x: number; y: number } | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const refetch = useCallback(async () => {
     try { setItems(await fetchMyDrive()); } catch {}
@@ -299,7 +307,34 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
     return () => window.removeEventListener("focus", refetch);
   }, [refetch]);
 
-  const roots = useMemo(() => buildRoots(items), [items]);
+  const allRoots = useMemo(() => buildRoots(items), [items]);
+
+  // En mode solo : on ne montre que le dossier sélectionné
+  const roots = useMemo(() => {
+    if (!soloFolder) return allRoots;
+    function findNode(nodes: TreeNode[]): TreeNode | null {
+      for (const n of nodes) {
+        if (n.id === soloFolder) return n;
+        const f = findNode(n.children);
+        if (f) return f;
+      }
+      return null;
+    }
+    const found = findNode(allRoots);
+    return found ? [found] : allRoots;
+  }, [allRoots, soloFolder]);
+
+  // Position du bouton S (via DOM — data-id ReactFlow)
+  useEffect(() => {
+    if (!folderHoverId) { setSoloBtnPos(null); return; }
+    const raf = requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(`[data-id="${folderHoverId}"]`);
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setSoloBtnPos({ x: rect.left - 36, y: rect.top + rect.height / 2 - 14 });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [folderHoverId]);
 
   const { nodes: cNodes, edges: cEdges } = useMemo(
     () => buildGraph(roots, expanded, hovered, T as typeof JOUR),
@@ -346,6 +381,17 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
     }
   }, [refetch]);
 
+  // Hover sur dossier → afficher bouton S
+  const onNodeMouseEnter = useCallback((_: React.MouseEvent, node: Node) => {
+    if (!node.data?.isFolder || node.id === "root") return;
+    clearTimeout(hideTimer.current);
+    setFolderHoverId(node.data.folderId as string);
+  }, []);
+  const onNodeMouseLeave = useCallback((_: React.MouseEvent, node: Node) => {
+    if (!node.data?.isFolder) return;
+    hideTimer.current = setTimeout(() => setFolderHoverId(null), 200);
+  }, []);
+
   // Click: toggle folder / open doc / ouvrir menu "+"
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     if (node.data?.isAdd) {
@@ -366,6 +412,8 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
         onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
         onNodeDrag={onNodeDrag} onNodeDragStop={onNodeDragStop}
+        onNodeMouseEnter={onNodeMouseEnter}
+        onNodeMouseLeave={onNodeMouseLeave}
         fitView fitViewOptions={{ padding: 0.15 }}
         minZoom={0.04} maxZoom={4}
         proOptions={{ hideAttribution: true }}
@@ -382,6 +430,31 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
         />
       </ReactFlow>
 
+      {/* Bouton Solo (S) — superposé via position fixed */}
+      {soloBtnPos && folderHoverId && (
+        <button
+          onMouseEnter={() => clearTimeout(hideTimer.current)}
+          onMouseLeave={() => { hideTimer.current = setTimeout(() => setFolderHoverId(null), 200); }}
+          onClick={() => {
+            function findTitle(nodes: TreeNode[], id: string): string {
+              for (const n of nodes) { if (n.id === id) return n.title; const f = findTitle(n.children, id); if (f) return f; }
+              return "";
+            }
+            setSoloFolder(folderHoverId);
+            setSoloFolderName(findTitle(allRoots, folderHoverId));
+            setFolderHoverId(null);
+          }}
+          style={{
+            position: "fixed", left: soloBtnPos.x, top: soloBtnPos.y,
+            width: 28, height: 28, borderRadius: "50%",
+            background: "#166534", color: "#4ade80", border: "2px solid #22c55e",
+            fontSize: 11, fontWeight: 800, cursor: "pointer", zIndex: 50,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            lineHeight: 1,
+          }}
+        >S</button>
+      )}
+
       {/* Barre du haut */}
       <div style={{ position: "absolute", top: 16, left: 16, zIndex: 10, display: "flex", alignItems: "center", gap: 10 }}>
         <Link href="/mydrive" style={{
@@ -394,6 +467,15 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
           style={{ background: T.barBg, color: T.barText, border: `1px solid ${T.barBorder}`, borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
           {isJour ? "☀️ Jour" : "🌙 Nuit"}
         </button>
+        {soloFolder && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#166534", border: "1px solid #22c55e", borderRadius: 8, padding: "6px 12px" }}>
+            <span style={{ color: "#4ade80", fontSize: 13, fontWeight: 600 }}>Solo : {soloFolderName}</span>
+            <button
+              onClick={() => { setSoloFolder(null); setSoloFolderName(""); }}
+              style={{ background: "none", border: "none", color: "#4ade80", fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 2px" }}
+            >×</button>
+          </div>
+        )}
         <span style={{ color: T.barText, fontSize: 12, opacity: 0.6, userSelect: "none" }}>
           Glisser un doc sur un dossier · Cliquer ▶ pour ouvrir
         </span>
