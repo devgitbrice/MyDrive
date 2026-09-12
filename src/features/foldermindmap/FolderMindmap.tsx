@@ -134,13 +134,17 @@ function buildRoots(items: MyDriveItem[]): TreeNode[] {
 }
 
 // Slot height: total vertical space a node occupies (self + expanded children)
-function slotH(node: TreeNode, exp: Set<string>): number {
+function slotH(node: TreeNode, exp: Set<string>, soloFolder: string | null = null): number {
   if (!node.isFolder) return DOC_SLOT;
-  if (!exp.has(node.id)) return FOLD_SLOT;
+  if (!exp.has(node.id)) {
+    // Solo folder always reserves space for its "Ajouter" add node
+    if (node.id === soloFolder) return FOLD_SLOT + CHILD_GAP + ADD_SLOT;
+    return FOLD_SLOT;
+  }
   // Even empty open folders show the "+" node
   if (node.children.length === 0) return FOLD_SLOT + CHILD_GAP + ADD_SLOT;
-  const childTotal = node.children.reduce((s, c) => s + slotH(c, exp), 0);
-  return childTotal + CHILD_GAP * node.children.length + ADD_SLOT; // extra slot for "+"
+  const childTotal = node.children.reduce((s, c) => s + slotH(c, exp, soloFolder), 0);
+  return childTotal + CHILD_GAP * node.children.length + ADD_SLOT;
 }
 
 // ─── Graph builder ────────────────────────────────────────────────────────────
@@ -154,10 +158,11 @@ function placeNodes(
   parentId: string,
   level: number,
   startY: number,
+  soloFolder: string | null = null,
 ): void {
   let cursor = startY;
   for (const n of treeNodes) {
-    const sh = slotH(n, exp);
+    const sh = slotH(n, exp, soloFolder);
     const nodeH = n.isFolder ? FOLDER_H : DOC_H;
     const nodeY = cursor + sh / 2 - nodeH / 2;
     const nodeX = COL_ROOT + (level + 1) * COL_GAP;
@@ -217,8 +222,8 @@ function placeNodes(
     if (n.isFolder && isOpen) {
       let childCursor = cursor;
       if (n.children.length > 0) {
-        placeNodes(n.children, exp, hovered, T, rfNodes, rfEdges, rfId, level + 1, cursor);
-        childCursor += n.children.reduce((s, c) => s + slotH(c, exp), 0) + CHILD_GAP * n.children.length;
+        placeNodes(n.children, exp, hovered, T, rfNodes, rfEdges, rfId, level + 1, cursor, soloFolder);
+        childCursor += n.children.reduce((s, c) => s + slotH(c, exp, soloFolder), 0) + CHILD_GAP * n.children.length;
       }
       // Nœud "+" pour créer dans ce dossier
       const addId = `add-${n.id}`;
@@ -246,6 +251,33 @@ function placeNodes(
       });
     }
 
+    // Solo folder (not expanded): toujours montrer le nœud "Ajouter"
+    if (n.isFolder && !isOpen && n.id === soloFolder) {
+      const addId = `add-${n.id}`;
+      const addX = COL_ROOT + (level + 2) * COL_GAP;
+      const addY = nodeY + FOLDER_H + CHILD_GAP;
+      rfNodes.push({
+        id: addId,
+        position: { x: addX, y: addY },
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+        data: { label: "Ajouter", isAdd: true, folderId: n.id },
+        style: {
+          background: "transparent", color: T.folderText(color),
+          border: `1.5px dashed ${color}99`,
+          borderRadius: 8, padding: "6px 16px",
+          fontSize: 12, cursor: "pointer",
+          fontWeight: 600, whiteSpace: "nowrap",
+          opacity: 0.75,
+        },
+      });
+      rfEdges.push({
+        id: `e-${rfId}-${addId}`,
+        source: rfId, target: addId, type: "smoothstep",
+        style: { stroke: `${color}44`, strokeWidth: 1, strokeDasharray: "4 3" },
+      });
+    }
+
     cursor += sh + CHILD_GAP;
   }
 }
@@ -255,11 +287,12 @@ function buildGraph(
   exp: Set<string>,
   hovered: string | null,
   T: typeof JOUR,
+  soloFolder: string | null = null,
 ): { nodes: Node[]; edges: Edge[] } {
   const rfNodes: Node[] = [];
   const rfEdges: Edge[] = [];
 
-  const totalH = roots.reduce((s, r) => s + slotH(r, exp), 0) + CHILD_GAP * (roots.length - 1);
+  const totalH = roots.reduce((s, r) => s + slotH(r, exp, soloFolder), 0) + CHILD_GAP * (roots.length - 1);
 
   rfNodes.push({
     id: "root",
@@ -276,30 +309,32 @@ function buildGraph(
     },
   });
 
-  placeNodes(roots, exp, hovered, T, rfNodes, rfEdges, "root", 0, 0);
+  placeNodes(roots, exp, hovered, T, rfNodes, rfEdges, "root", 0, 0, soloFolder);
 
-  // Nœud "+" racine — créer un nouveau dossier/item à la racine
-  const endY = roots.reduce((acc, r) => acc + slotH(r, exp) + CHILD_GAP, 0);
-  rfNodes.push({
-    id: "add-root",
-    position: { x: COL_ROOT + COL_GAP, y: endY },
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    data: { label: "+ Ajouter", isAdd: true, folderId: null },
-    style: {
-      background: "transparent", color: "#22c55e",
-      border: "1.5px dashed #22c55e99",
-      borderRadius: 8, padding: "6px 16px",
-      fontSize: 12, cursor: "pointer",
-      fontWeight: 600, whiteSpace: "nowrap",
-      opacity: 0.75,
-    },
-  });
-  rfEdges.push({
-    id: "e-root-add-root",
-    source: "root", target: "add-root", type: "smoothstep",
-    style: { stroke: "#22c55e44", strokeWidth: 1, strokeDasharray: "4 3" },
-  });
+  // Nœud "+" racine — masqué en mode solo (le dossier solo a son propre nœud "Ajouter")
+  if (!soloFolder) {
+    const endY = roots.reduce((acc, r) => acc + slotH(r, exp, soloFolder) + CHILD_GAP, 0);
+    rfNodes.push({
+      id: "add-root",
+      position: { x: COL_ROOT + COL_GAP, y: endY },
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+      data: { label: "+ Ajouter", isAdd: true, folderId: null },
+      style: {
+        background: "transparent", color: "#22c55e",
+        border: "1.5px dashed #22c55e99",
+        borderRadius: 8, padding: "6px 16px",
+        fontSize: 12, cursor: "pointer",
+        fontWeight: 600, whiteSpace: "nowrap",
+        opacity: 0.75,
+      },
+    });
+    rfEdges.push({
+      id: "e-root-add-root",
+      source: "root", target: "add-root", type: "smoothstep",
+      style: { stroke: "#22c55e44", strokeWidth: 1, strokeDasharray: "4 3" },
+    });
+  }
 
   return { nodes: rfNodes, edges: rfEdges };
 }
@@ -361,8 +396,8 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
   }, [folderHoverId]);
 
   const { nodes: cNodes, edges: cEdges } = useMemo(
-    () => buildGraph(roots, expanded, hovered, T as typeof JOUR),
-    [roots, expanded, hovered, T],
+    () => buildGraph(roots, expanded, hovered, T as typeof JOUR, soloFolder),
+    [roots, expanded, hovered, T, soloFolder],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(cNodes);
