@@ -37,9 +37,11 @@ function getItemUrl(item: MyDriveItem): string {
   }
 }
 
-function deg2rad(deg: number) {
-  return (deg * Math.PI) / 180;
-}
+const ITEM_GAP = 72;   // px entre deux items verticalement
+const TYPE_GAP = 32;   // px entre deux groupes de types
+const COL_ROOT = 0;
+const COL_TYPE = 360;
+const COL_ITEM = 720;
 
 function buildGraph(items: MyDriveItem[]): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
@@ -53,12 +55,15 @@ function buildGraph(items: MyDriveItem[]): { nodes: Node[]; edges: Edge[] } {
   }
 
   const types = Object.keys(groups);
-  const TYPE_RADIUS = 340;
-  const ITEM_RADIUS = 220;
 
+  // Calcul de la hauteur de chaque slot de type
+  const slotHeights = types.map((t) => Math.max(ITEM_GAP, groups[t].length * ITEM_GAP));
+  const totalHeight = slotHeights.reduce((a, b) => a + b, 0) + TYPE_GAP * (types.length - 1);
+
+  // Nœud racine centré verticalement
   nodes.push({
     id: "root",
-    position: { x: 0, y: 0 },
+    position: { x: COL_ROOT, y: totalHeight / 2 - 55 },
     data: { label: "MyDrive" },
     style: {
       background: "#166534",
@@ -75,29 +80,28 @@ function buildGraph(items: MyDriveItem[]): { nodes: Node[]; edges: Edge[] } {
     },
   });
 
+  let cursorY = 0;
   types.forEach((type, ti) => {
-    const typeAngleDeg = (360 / types.length) * ti - 90;
-    const typeAngle = deg2rad(typeAngleDeg);
-    const tx = Math.cos(typeAngle) * TYPE_RADIUS;
-    const ty = Math.sin(typeAngle) * TYPE_RADIUS;
+    const slotH = slotHeights[ti];
+    const typeCenterY = cursorY + slotH / 2;
+    cursorY += slotH + TYPE_GAP;
+
     const cfg = TYPE_CONFIG[type] ?? { label: type, color: "#6b7280", bg: "#1f2937" };
     const typeId = `type-${type}`;
 
     nodes.push({
       id: typeId,
-      position: { x: tx, y: ty },
-      data: { label: `${cfg.label}\n(${groups[type].length})` },
+      position: { x: COL_TYPE, y: typeCenterY - 22 },
+      data: { label: `${cfg.label} (${groups[type].length})` },
       style: {
         background: cfg.bg,
         color: cfg.color,
         border: `2px solid ${cfg.color}`,
         borderRadius: 12,
-        padding: "10px 18px",
+        padding: "8px 18px",
         fontWeight: 700,
         fontSize: 13,
-        whiteSpace: "pre-line",
-        textAlign: "center",
-        lineHeight: 1.3,
+        whiteSpace: "nowrap",
       },
     });
 
@@ -105,38 +109,33 @@ function buildGraph(items: MyDriveItem[]): { nodes: Node[]; edges: Edge[] } {
       id: `e-root-${typeId}`,
       source: "root",
       target: typeId,
+      type: "smoothstep",
       style: { stroke: cfg.color, strokeWidth: 2 },
     });
 
     const typeItems = groups[type];
-    const arcSpanDeg = Math.min(80, Math.max(30, typeItems.length * 15));
+    const itemsHeight = (typeItems.length - 1) * ITEM_GAP;
+    const itemsStartY = typeCenterY - itemsHeight / 2;
 
     typeItems.forEach((item, ii) => {
-      const t = typeItems.length === 1
-        ? 0
-        : (ii / (typeItems.length - 1) - 0.5);
-      const itemAngle = typeAngle + deg2rad(arcSpanDeg * t);
-      const ix = tx + Math.cos(itemAngle) * ITEM_RADIUS;
-      const iy = ty + Math.sin(itemAngle) * ITEM_RADIUS;
+      const iy = itemsStartY + ii * ITEM_GAP;
       const itemId = `item-${item.id}`;
       const url = getItemUrl(item);
-      const label = item.title.length > 28 ? item.title.slice(0, 25) + "…" : item.title;
+      const label = item.title.length > 30 ? item.title.slice(0, 27) + "…" : item.title;
 
       nodes.push({
         id: itemId,
-        position: { x: ix, y: iy },
+        position: { x: COL_ITEM, y: iy - 18 },
         data: { label, url },
         style: {
           background: "#111827",
           color: "#e5e7eb",
           border: `1px solid ${cfg.color}66`,
           borderRadius: 8,
-          padding: "6px 12px",
+          padding: "6px 14px",
           fontSize: 12,
           cursor: "pointer",
-          maxWidth: 170,
-          textAlign: "center",
-          lineHeight: 1.4,
+          whiteSpace: "nowrap",
         },
       });
 
@@ -144,6 +143,7 @@ function buildGraph(items: MyDriveItem[]): { nodes: Node[]; edges: Edge[] } {
         id: `e-${typeId}-${itemId}`,
         source: typeId,
         target: itemId,
+        type: "smoothstep",
         style: { stroke: `${cfg.color}66`, strokeWidth: 1 },
       });
     });
