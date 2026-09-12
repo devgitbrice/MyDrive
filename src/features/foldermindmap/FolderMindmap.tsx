@@ -45,7 +45,9 @@ function docLabel(item: MyDriveItem): string {
   return `${icon} ${item.title}`;
 }
 
-const ITEM_GAP = 72;
+const ITEM_GAP    = 110;  // assez grand pour 3 lignes de texte wrappé
+const ITEM_WIDTH  = 340;  // largeur fixe identique pour toutes les bulles
+const ITEM_MINHGT = 60;
 const TYPE_GAP = 44;
 const FOLDER_H = 44;
 const COL_ROOT   = 0;
@@ -155,14 +157,16 @@ function buildGraph(
             color: "#e5e7eb",
             border: `1px solid ${color}55`,
             borderRadius: 8,
-            padding: "8px 14px",
-            fontSize: 12,
+            padding: "10px 16px",
+            fontSize: 13,
             cursor: "pointer",
-            maxWidth: 260,
+            width: ITEM_WIDTH,
+            minHeight: ITEM_MINHGT,
             whiteSpace: "normal",
             wordBreak: "break-word",
-            lineHeight: 1.5,
+            lineHeight: 1.55,
             textAlign: "left",
+            boxSizing: "border-box",
           },
         });
 
