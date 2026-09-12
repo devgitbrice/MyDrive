@@ -14,12 +14,21 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import Link from "next/link";
 import type { MyDriveItem } from "@/features/mydrive/types";
+import { fetchMyDrive } from "@/features/mydrive/lib/fetchMyDrive";
+import { moveItem } from "@/features/mydrive/lib/folders";
 
-// Palette de couleurs pour les dossiers (cycle si > 10 dossiers)
 const FOLDER_COLORS = [
   "#3b82f6", "#6366f1", "#a855f7", "#ec4899",
   "#f97316", "#eab308", "#22c55e", "#14b8a6",
   "#06b6d4", "#f43f5e",
+];
+
+const CREATE_OPTIONS = [
+  { label: "📄 Document",      url: "/newdoc" },
+  { label: "🧠 Mindmap",       url: "/newmindmap" },
+  { label: "📊 Table",         url: "/newtable" },
+  { label: "📽 Présentation",  url: "/newpresentation" },
+  { label: "🐍 Script Python", url: "/newpython" },
 ];
 
 function getItemUrl(item: MyDriveItem): string {
@@ -36,35 +45,54 @@ function getItemUrl(item: MyDriveItem): string {
 }
 
 function docLabel(item: MyDriveItem): string {
-  const t = item.doc_type || item.type || "";
   const icons: Record<string, string> = {
     scan: "🖼", doc: "📄", mindmap: "🧠", table: "📊",
     presentation: "📽", voyage: "✈️", python: "🐍", fiche: "🗂",
   };
-  const icon = icons[t] ?? "📁";
-  return `${icon} ${item.title}`;
+  const t = item.doc_type || item.type || "";
+  return `${icons[t] ?? "📁"} ${item.title}`;
 }
 
-const ITEM_GAP    = 110;  // assez grand pour 3 lignes de texte wrappé
-const ITEM_WIDTH  = 340;  // largeur fixe identique pour toutes les bulles
+const ITEM_GAP    = 110;
+const ITEM_WIDTH  = 340;
 const ITEM_MINHGT = 60;
-const TYPE_GAP = 44;
-const FOLDER_H = 44;
-const COL_ROOT   = 0;
-const COL_FOLDER = 300;
-const COL_ITEM   = 620;
+const TYPE_GAP    = 44;
+const FOLDER_H    = 44;
+const COL_ROOT    = 0;
+const COL_FOLDER  = 300;
+const COL_ITEM    = 680;
 
-interface FolderNode {
-  id: string;
-  title: string;
-  color: string;
-  count: number;        // nb d'items directs
-  children: MyDriveItem[];
+interface FolderNode { id: string; title: string; color: string; count: number; children: MyDriveItem[] }
+
+function buildFolders(items: MyDriveItem[]): FolderNode[] {
+  const active = items.filter((i) => !(i as any).deleted_at);
+  const rootFolders = active
+    .filter((i) => i.type === "folder" && !i.parent_id)
+    .sort((a, b) => a.title.localeCompare(b.title));
+  const noFolder = active.filter((i) => i.type !== "folder" && !i.parent_id);
+
+  const result: FolderNode[] = [];
+  if (noFolder.length > 0) {
+    result.push({ id: "no-folder", title: "Sans dossier", color: FOLDER_COLORS[0], count: noFolder.length, children: noFolder });
+  }
+  rootFolders.forEach((folder, fi) => {
+    const children = active.filter((i) => i.parent_id === folder.id && i.type !== "folder");
+    const subCount = active.filter((i) => i.parent_id === folder.id && i.type === "folder").length;
+    result.push({
+      id: folder.id,
+      title: folder.title,
+      color: FOLDER_COLORS[(fi + 1) % FOLDER_COLORS.length],
+      count: children.length + subCount,
+      children,
+    });
+  });
+  return result;
 }
 
 function buildGraph(
   folders: FolderNode[],
   expandedFolders: Set<string>,
+  draggingOver: string | null,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -74,28 +102,20 @@ function buildGraph(
       ? Math.max(FOLDER_H, f.children.length * ITEM_GAP)
       : FOLDER_H
   );
-  const totalHeight =
-    slotHeights.reduce((a, b) => a + b, 0) + TYPE_GAP * (folders.length - 1);
+  const totalHeight = slotHeights.reduce((a, b) => a + b, 0) + TYPE_GAP * (folders.length - 1);
 
-  // Nœud racine MyDrive
   nodes.push({
     id: "root",
     position: { x: COL_ROOT, y: totalHeight / 2 - 55 },
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
+    draggable: false,
     data: { label: "MyDrive" },
     style: {
-      background: "#166534",
-      color: "#4ade80",
-      border: "2px solid #22c55e",
-      borderRadius: "50%",
-      width: 110,
-      height: 110,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontWeight: "bold",
-      fontSize: 18,
+      background: "#166534", color: "#4ade80", border: "2px solid #22c55e",
+      borderRadius: "50%", width: 110, height: 110,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontWeight: "bold", fontSize: 18,
     },
   });
 
@@ -105,11 +125,11 @@ function buildGraph(
     const centerY = cursorY + slotH / 2;
     cursorY += slotH + TYPE_GAP;
 
-    const color = folder.color;
+    const { color } = folder;
     const isOpen = expandedFolders.has(folder.id);
+    const isTarget = draggingOver === folder.id;
     const arrow = folder.children.length === 0 ? "·" : isOpen ? "▼" : "▶";
 
-    // Nœud dossier
     nodes.push({
       id: folder.id,
       position: { x: COL_FOLDER, y: centerY - FOLDER_H / 2 },
@@ -117,23 +137,23 @@ function buildGraph(
       targetPosition: Position.Left,
       data: { label: `${arrow} ${folder.title} (${folder.count})`, folderId: folder.id, isFolder: true, hasChildren: folder.children.length > 0 },
       style: {
-        background: color + "22",
-        color: color,
-        border: `2px solid ${isOpen ? color : color + "88"}`,
+        background: isTarget ? color + "44" : color + "22",
+        color,
+        border: `2px solid ${isTarget ? color : isOpen ? color : color + "88"}`,
         borderRadius: 12,
         padding: "8px 18px",
         fontWeight: 700,
         fontSize: 13,
         whiteSpace: "nowrap",
         cursor: folder.children.length > 0 ? "pointer" : "default",
+        transition: "background 0.15s, border-color 0.15s",
+        boxShadow: isTarget ? `0 0 12px ${color}66` : "none",
       },
     });
 
     edges.push({
       id: `e-root-${folder.id}`,
-      source: "root",
-      target: folder.id,
-      type: "smoothstep",
+      source: "root", target: folder.id, type: "smoothstep",
       style: { stroke: color + (isOpen ? "cc" : "77"), strokeWidth: isOpen ? 2 : 1.5 },
     });
 
@@ -142,39 +162,26 @@ function buildGraph(
       const startY = centerY - itemsH / 2;
 
       folder.children.forEach((item, ii) => {
-        const iy = startY + ii * ITEM_GAP;
         const itemId = `item-${item.id}`;
-        const url = getItemUrl(item);
-
         nodes.push({
           id: itemId,
-          position: { x: COL_ITEM, y: iy - 18 },
+          position: { x: COL_ITEM, y: startY + ii * ITEM_GAP - ITEM_MINHGT / 2 },
           sourcePosition: Position.Right,
           targetPosition: Position.Left,
-          data: { label: docLabel(item), url },
+          data: { label: docLabel(item), url: getItemUrl(item), docId: item.id },
           style: {
-            background: "#111827",
-            color: "#e5e7eb",
+            background: "#111827", color: "#e5e7eb",
             border: `1px solid ${color}55`,
-            borderRadius: 8,
-            padding: "10px 16px",
-            fontSize: 13,
-            cursor: "pointer",
-            width: ITEM_WIDTH,
-            minHeight: ITEM_MINHGT,
-            whiteSpace: "normal",
-            wordBreak: "break-word",
-            lineHeight: 1.55,
-            textAlign: "left",
-            boxSizing: "border-box",
+            borderRadius: 8, padding: "10px 16px",
+            fontSize: 13, cursor: "grab",
+            width: ITEM_WIDTH, minHeight: ITEM_MINHGT,
+            whiteSpace: "normal", wordBreak: "break-word",
+            lineHeight: 1.55, textAlign: "left", boxSizing: "border-box",
           },
         });
-
         edges.push({
           id: `e-${folder.id}-${itemId}`,
-          source: folder.id,
-          target: itemId,
-          type: "smoothstep",
+          source: folder.id, target: itemId, type: "smoothstep",
           style: { stroke: `${color}66`, strokeWidth: 1 },
         });
       });
@@ -184,68 +191,69 @@ function buildGraph(
   return { nodes, edges };
 }
 
-export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
+export default function FolderMindmap({ items: initialItems }: { items: MyDriveItem[] }) {
+  const [items, setItems] = useState(initialItems);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [draggingOver, setDraggingOver] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
-  // Construire la liste de dossiers à partir des items
-  const folders = useMemo<FolderNode[]>(() => {
-    const activeItems = items.filter((i) => !(i as any).deleted_at);
+  // Re-fetch depuis Supabase (sans reload)
+  const refetch = useCallback(async () => {
+    try { setItems(await fetchMyDrive()); } catch (e) { console.error(e); }
+  }, []);
 
-    // Dossiers racine (type="folder", parent_id=null)
-    const rootFolders = activeItems
-      .filter((i) => i.type === "folder" && !i.parent_id)
-      .sort((a, b) => a.title.localeCompare(b.title));
+  // Refresh quand l'onglet reprend le focus (après création dans un nouvel onglet)
+  useEffect(() => {
+    window.addEventListener("focus", refetch);
+    return () => window.removeEventListener("focus", refetch);
+  }, [refetch]);
 
-    // Items sans dossier (type≠folder, parent_id=null)
-    const noFolder = activeItems.filter((i) => i.type !== "folder" && !i.parent_id);
-
-    const result: FolderNode[] = [];
-
-    // "Sans dossier" en premier si des items existent
-    if (noFolder.length > 0) {
-      result.push({
-        id: "no-folder",
-        title: "Sans dossier",
-        color: FOLDER_COLORS[0],
-        count: noFolder.length,
-        children: noFolder,
-      });
-    }
-
-    // Vrais dossiers
-    rootFolders.forEach((folder, fi) => {
-      const children = activeItems.filter(
-        (i) => i.parent_id === folder.id && i.type !== "folder"
-      );
-      const subFolderCount = activeItems.filter(
-        (i) => i.parent_id === folder.id && i.type === "folder"
-      ).length;
-
-      result.push({
-        id: folder.id,
-        title: folder.title,
-        color: FOLDER_COLORS[(fi + 1) % FOLDER_COLORS.length],
-        count: children.length + subFolderCount,
-        children,
-      });
-    });
-
-    return result;
-  }, [items]);
+  const folders = useMemo(() => buildFolders(items), [items]);
 
   const { nodes: computed, edges: computedEdges } = useMemo(
-    () => buildGraph(folders, expandedFolders),
-    [folders, expandedFolders],
+    () => buildGraph(folders, expandedFolders, draggingOver),
+    [folders, expandedFolders, draggingOver],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(computed);
   const [edges, setEdges, onEdgesChange] = useEdgesState(computedEdges);
 
-  useEffect(() => {
-    setNodes(computed);
-    setEdges(computedEdges);
-  }, [computed, computedEdges, setNodes, setEdges]);
+  useEffect(() => { setNodes(computed); setEdges(computedEdges); },
+    [computed, computedEdges, setNodes, setEdges]);
 
+  // Détecte le dossier survolé pendant le drag
+  const onNodeDrag = useCallback((_: React.MouseEvent, node: Node, allNodes: Node[]) => {
+    if (!node.id.startsWith("item-")) { setDraggingOver(null); return; }
+    const nx = node.position.x, ny = node.position.y;
+    const target = allNodes.find(
+      (n) => n.data?.isFolder && Math.abs(n.position.x - nx) < 250 && Math.abs(n.position.y - ny) < 80
+    );
+    setDraggingOver(target?.id ?? null);
+  }, []);
+
+  // Drop : déplace le document vers le dossier cible
+  const onNodeDragStop = useCallback(async (_: React.MouseEvent, node: Node, allNodes: Node[]) => {
+    setDraggingOver(null);
+    if (!node.id.startsWith("item-")) return;
+
+    const docId = node.data?.docId as string;
+    const nx = node.position.x, ny = node.position.y;
+    const target = allNodes.find(
+      (n) => n.data?.isFolder && Math.abs(n.position.x - nx) < 250 && Math.abs(n.position.y - ny) < 80
+    );
+    if (!target) return;
+
+    const newParentId = target.id === "no-folder" ? null : target.id;
+    const current = items.find((i) => i.id === docId);
+    if (!current || current.parent_id === newParentId) return;
+
+    try {
+      await moveItem(docId, newParentId);
+      await refetch();
+    } catch (e) { console.error(e); }
+  }, [items, refetch]);
+
+  // Clic sur nœud
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     if (node.data?.isFolder && node.data?.hasChildren) {
       const key = node.data.folderId as string;
@@ -262,15 +270,13 @@ export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
   return (
     <div style={{ width: "100%", height: "100vh", position: "relative" }}>
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        nodes={nodes} edges={edges}
+        onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
-        fitView
-        fitViewOptions={{ padding: 0.15 }}
-        minZoom={0.04}
-        maxZoom={4}
+        onNodeDrag={onNodeDrag}
+        onNodeDragStop={onNodeDragStop}
+        fitView fitViewOptions={{ padding: 0.15 }}
+        minZoom={0.04} maxZoom={4}
         proOptions={{ hideAttribution: true }}
       >
         <Background color="#2a2a2a" gap={28} />
@@ -285,38 +291,62 @@ export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
         />
       </ReactFlow>
 
-      <div
-        style={{
-          position: "absolute",
-          top: 16,
-          left: 16,
-          zIndex: 10,
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          pointerEvents: "auto",
-        }}
-      >
-        <Link
-          href="/mydrive"
-          style={{
-            background: "#1f2937",
-            color: "#9ca3af",
-            border: "1px solid #374151",
-            borderRadius: 8,
-            padding: "8px 14px",
-            fontSize: 13,
-            textDecoration: "none",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
+      {/* Barre du haut */}
+      <div style={{ position: "absolute", top: 16, left: 16, zIndex: 10, display: "flex", alignItems: "center", gap: 12 }}>
+        <Link href="/mydrive" style={{
+          background: "#1f2937", color: "#9ca3af", border: "1px solid #374151",
+          borderRadius: 8, padding: "8px 14px", fontSize: 13, textDecoration: "none",
+          display: "inline-flex", alignItems: "center", gap: 6,
+        }}>
           ← MyDrive
         </Link>
         <span style={{ color: "#6b7280", fontSize: 12, userSelect: "none" }}>
-          Cliquer un dossier ▶ pour l&apos;ouvrir · Cliquer un item pour l&apos;éditer
+          Glisser un doc sur un dossier pour le déplacer
         </span>
+      </div>
+
+      {/* Bouton + flottant (bas droite) */}
+      <div style={{ position: "absolute", bottom: 28, right: 28, zIndex: 20, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+
+        {/* Menu création */}
+        {showCreate && (
+          <div style={{
+            background: "#1f2937", border: "1px solid #374151", borderRadius: 12,
+            padding: "8px 4px", display: "flex", flexDirection: "column", gap: 2,
+            boxShadow: "0 8px 24px #00000088",
+          }}>
+            {CREATE_OPTIONS.map((opt) => (
+              <button
+                key={opt.url}
+                onClick={() => { window.open(opt.url, "_blank"); setShowCreate(false); }}
+                style={{
+                  background: "transparent", color: "#e5e7eb", border: "none",
+                  padding: "10px 20px", fontSize: 14, textAlign: "left",
+                  cursor: "pointer", borderRadius: 8, whiteSpace: "nowrap",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#374151")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Bouton + */}
+        <button
+          onClick={() => setShowCreate((v) => !v)}
+          style={{
+            width: 54, height: 54, borderRadius: "50%",
+            background: showCreate ? "#374151" : "#166534",
+            color: showCreate ? "#9ca3af" : "#4ade80",
+            border: `2px solid ${showCreate ? "#4b5563" : "#22c55e"}`,
+            fontSize: 28, cursor: "pointer", lineHeight: 1,
+            boxShadow: "0 4px 16px #00000066", transition: "all 0.15s",
+          }}
+        >
+          {showCreate ? "×" : "+"}
+        </button>
       </div>
     </div>
   );
