@@ -27,21 +27,27 @@ const CREATE_OPTIONS = [
   { label: "🐍 Script Python", url: "/newpython" },
 ];
 
-const DARK = {
+// JOUR  = fond noir, texte/contours blancs
+const JOUR = {
   canvas: "#0d0d0d", bgDot: "#2a2a2a",
-  itemBg: "#111827", itemText: "#e5e7eb",
+  itemBg: "#111827", itemText: "#f1f5f9",
+  itemBorder: "#e5e7eb",
   ctrlBg: "#1a1a1a", ctrlBorder: "#374151",
-  barBg: "#1f2937", barText: "#9ca3af", barBorder: "#374151",
-  menuBg: "#1f2937", menuText: "#e5e7eb", menuHover: "#374151",
+  barBg: "#1f2937", barText: "#e5e7eb", barBorder: "#4b5563",
+  menuBg: "#1f2937", menuText: "#f1f5f9", menuHover: "#374151",
   minimap: "#111",
+  folderText: (c: string) => c,   // couleur vive sur fond noir
 };
-const LIGHT = {
-  canvas: "#f1f5f9", bgDot: "#cbd5e1",
-  itemBg: "#ffffff", itemText: "#111827",
-  ctrlBg: "#ffffff", ctrlBorder: "#d1d5db",
-  barBg: "#ffffff", barText: "#374151", barBorder: "#d1d5db",
+// NUIT  = fond blanc, texte/contours noirs
+const NUIT = {
+  canvas: "#ffffff", bgDot: "#d1d5db",
+  itemBg: "#f9fafb", itemText: "#111827",
+  itemBorder: "#374151",
+  ctrlBg: "#ffffff", ctrlBorder: "#9ca3af",
+  barBg: "#f3f4f6", barText: "#111827", barBorder: "#d1d5db",
   menuBg: "#ffffff", menuText: "#111827", menuHover: "#f3f4f6",
   minimap: "#f9fafb",
+  folderText: (_c: string) => "#111827", // texte noir forcé
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -79,7 +85,8 @@ const MAX_DEPTH  = 6;
 const FOLDER_H   = 44;
 const DOC_H      = 60;
 const DOC_SLOT   = 110; // vertical slot per doc (accounts for multi-line wrapping)
-const FOLD_SLOT  = 50;  // vertical slot for collapsed folder
+const FOLD_SLOT  = 70;  // vertical slot for collapsed folder (allows 2-line names)
+const FOLDER_MAX_W = 210; // max-width pour les nœuds dossier (retour à la ligne)
 const ADD_SLOT   = 50;  // slot for the "+" add node
 const CHILD_GAP  = 14;
 const COL_GAP    = 320;
@@ -141,7 +148,7 @@ function placeNodes(
   treeNodes: TreeNode[],
   exp: Set<string>,
   hovered: string | null,
-  T: typeof DARK,
+  T: typeof JOUR,
   rfNodes: Node[],
   rfEdges: Edge[],
   parentId: string,
@@ -169,10 +176,13 @@ function placeNodes(
         data: { label: `${arrow} ${n.title} (${n.children.length})`, folderId: n.id, isFolder: true, hasChildren: n.children.length > 0 },
         style: {
           background: isHover ? color + "44" : color + "18",
-          color,
+          color: T.folderText(color),
           border: `2px solid ${isHover ? color : isOpen ? color : color + "99"}`,
-          borderRadius: 12, padding: "8px 18px",
-          fontWeight: 700, fontSize: 13, whiteSpace: "nowrap",
+          borderRadius: 12, padding: "8px 14px",
+          fontWeight: 700, fontSize: 13,
+          whiteSpace: "normal", wordBreak: "break-word",
+          maxWidth: FOLDER_MAX_W,
+          lineHeight: 1.4,
           cursor: n.children.length > 0 ? "pointer" : "default",
           boxShadow: isHover ? `0 0 12px ${color}55` : "none",
           transition: "background 0.15s, box-shadow 0.15s",
@@ -187,7 +197,7 @@ function placeNodes(
         data: { label: docLabel(n.docItem!), url: getItemUrl(n.docItem!), docId: n.id },
         style: {
           background: T.itemBg, color: T.itemText,
-          border: `1.5px solid ${color}66`,
+          border: `1.5px solid ${T.itemBorder}`,
           borderRadius: 8, padding: "10px 16px",
           fontSize: 13, cursor: "grab",
           width: ITEM_WIDTH, minHeight: DOC_H,
@@ -244,7 +254,7 @@ function buildGraph(
   roots: TreeNode[],
   exp: Set<string>,
   hovered: string | null,
-  T: typeof DARK,
+  T: typeof JOUR,
 ): { nodes: Node[]; edges: Edge[] } {
   const rfNodes: Node[] = [];
   const rfEdges: Edge[] = [];
@@ -277,8 +287,8 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
   const [hovered, setHovered] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [createInFolder, setCreateInFolder] = useState<string | null>(null);
-  const [isDark, setIsDark] = useState(true);
-  const T = isDark ? DARK : LIGHT;
+  const [isJour, setIsJour] = useState(true); // Jour = fond noir / Nuit = fond blanc
+  const T = isJour ? JOUR : NUIT;
 
   const refetch = useCallback(async () => {
     try { setItems(await fetchMyDrive()); } catch {}
@@ -292,7 +302,7 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
   const roots = useMemo(() => buildRoots(items), [items]);
 
   const { nodes: cNodes, edges: cEdges } = useMemo(
-    () => buildGraph(roots, expanded, hovered, T),
+    () => buildGraph(roots, expanded, hovered, T as typeof JOUR),
     [roots, expanded, hovered, T],
   );
 
@@ -379,9 +389,10 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
           borderRadius: 8, padding: "8px 14px", fontSize: 13, textDecoration: "none",
           display: "inline-flex", alignItems: "center", gap: 6,
         }}>← MyDrive</Link>
-        <button onClick={() => setIsDark((v) => !v)} title={isDark ? "Vue de jour" : "Vue de nuit"}
-          style={{ background: T.barBg, color: T.barText, border: `1px solid ${T.barBorder}`, borderRadius: 8, padding: "8px 12px", fontSize: 16, cursor: "pointer" }}>
-          {isDark ? "☀️" : "🌙"}
+        <button onClick={() => setIsJour((v) => !v)}
+          title={isJour ? "Passer en vue Nuit (fond blanc)" : "Passer en vue Jour (fond noir)"}
+          style={{ background: T.barBg, color: T.barText, border: `1px solid ${T.barBorder}`, borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+          {isJour ? "☀️ Jour" : "🌙 Nuit"}
         </button>
         <span style={{ color: T.barText, fontSize: 12, opacity: 0.6, userSelect: "none" }}>
           Glisser un doc sur un dossier · Cliquer ▶ pour ouvrir
