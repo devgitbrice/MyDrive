@@ -42,11 +42,10 @@ function docLabel(item: MyDriveItem): string {
     presentation: "📽", voyage: "✈️", python: "🐍", fiche: "🗂",
   };
   const icon = icons[t] ?? "📁";
-  const title = item.title.length > 30 ? item.title.slice(0, 27) + "…" : item.title;
-  return `${icon} ${title}`;
+  return `${icon} ${item.title}`;
 }
 
-const ITEM_GAP = 58;
+const ITEM_GAP = 72;
 const TYPE_GAP = 44;
 const FOLDER_H = 44;
 const COL_ROOT   = 0;
@@ -156,10 +155,14 @@ function buildGraph(
             color: "#e5e7eb",
             border: `1px solid ${color}55`,
             borderRadius: 8,
-            padding: "6px 14px",
+            padding: "8px 14px",
             fontSize: 12,
             cursor: "pointer",
-            whiteSpace: "nowrap",
+            maxWidth: 260,
+            whiteSpace: "normal",
+            wordBreak: "break-word",
+            lineHeight: 1.5,
+            textAlign: "left",
           },
         });
 
