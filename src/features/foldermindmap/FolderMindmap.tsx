@@ -159,6 +159,7 @@ function placeNodes(
   level: number,
   startY: number,
   soloFolder: string | null = null,
+  onAddFolder: (id: string) => void = () => {},
 ): void {
   let cursor = startY;
   for (const n of treeNodes) {
@@ -173,12 +174,36 @@ function placeNodes(
 
     if (n.isFolder) {
       const arrow = n.children.length === 0 ? "·" : isOpen ? "▼" : "▶";
+      const addBtn = (
+        <button
+          onClick={(e) => { e.stopPropagation(); onAddFolder(n.id); }}
+          title="Ajouter dans ce dossier"
+          style={{
+            position: "absolute", top: -10, right: -10,
+            width: 20, height: 20, borderRadius: "50%",
+            background: "#166534", color: "#4ade80",
+            border: "1.5px solid #22c55e",
+            fontSize: 14, fontWeight: 900, lineHeight: 1,
+            cursor: "pointer", padding: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 100,
+          }}
+        >+</button>
+      );
       rfNodes.push({
         id: rfId,
         position: { x: nodeX, y: nodeY },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
-        data: { label: `${arrow} ${n.title} (${n.children.length})`, folderId: n.id, isFolder: true, hasChildren: n.children.length > 0 },
+        data: {
+          label: (
+            <div style={{ position: "relative", width: "100%" }}>
+              {arrow} {n.title} ({n.children.length})
+              {addBtn}
+            </div>
+          ),
+          folderId: n.id, isFolder: true, hasChildren: n.children.length > 0,
+        },
         style: {
           background: isHover ? color + "44" : color + "18",
           color: T.folderText(color),
@@ -188,6 +213,7 @@ function placeNodes(
           whiteSpace: "normal", wordBreak: "break-word",
           maxWidth: FOLDER_MAX_W,
           lineHeight: 1.4,
+          overflow: "visible",
           cursor: n.children.length > 0 ? "pointer" : "default",
           boxShadow: isHover ? `0 0 12px ${color}55` : "none",
           transition: "background 0.15s, box-shadow 0.15s",
@@ -222,7 +248,7 @@ function placeNodes(
     if (n.isFolder && isOpen) {
       let childCursor = cursor;
       if (n.children.length > 0) {
-        placeNodes(n.children, exp, hovered, T, rfNodes, rfEdges, rfId, level + 1, cursor, soloFolder);
+        placeNodes(n.children, exp, hovered, T, rfNodes, rfEdges, rfId, level + 1, cursor, soloFolder, onAddFolder);
         childCursor += n.children.reduce((s, c) => s + slotH(c, exp, soloFolder), 0) + CHILD_GAP * n.children.length;
       }
       // Nœud "+" pour créer dans ce dossier
@@ -288,6 +314,7 @@ function buildGraph(
   hovered: string | null,
   T: typeof JOUR,
   soloFolder: string | null = null,
+  onAddFolder: (id: string) => void = () => {},
 ): { nodes: Node[]; edges: Edge[] } {
   const rfNodes: Node[] = [];
   const rfEdges: Edge[] = [];
@@ -309,7 +336,7 @@ function buildGraph(
     },
   });
 
-  placeNodes(roots, exp, hovered, T, rfNodes, rfEdges, "root", 0, 0, soloFolder);
+  placeNodes(roots, exp, hovered, T, rfNodes, rfEdges, "root", 0, 0, soloFolder, onAddFolder);
 
   // Nœud "+" racine — masqué en mode solo (le dossier solo a son propre nœud "Ajouter")
   if (!soloFolder) {
@@ -401,8 +428,8 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
   }, [folderHoverId]);
 
   const { nodes: cNodes, edges: cEdges } = useMemo(
-    () => buildGraph(roots, expanded, hovered, T as typeof JOUR, soloFolder),
-    [roots, expanded, hovered, T, soloFolder],
+    () => buildGraph(roots, expanded, hovered, T as typeof JOUR, soloFolder, handleFolderAdd),
+    [roots, expanded, hovered, T, soloFolder, handleFolderAdd],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(cNodes);
@@ -444,6 +471,11 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
       // Au retour de focus, refetch pour voir le nouvel item
     }
   }, [refetch]);
+
+  const handleFolderAdd = useCallback((folderId: string) => {
+    setCreateInFolder(folderId);
+    setShowCreate(true);
+  }, []);
 
   // Hover sur dossier → afficher bouton S
   const onNodeMouseEnter = useCallback((_: React.MouseEvent, node: Node) => {
