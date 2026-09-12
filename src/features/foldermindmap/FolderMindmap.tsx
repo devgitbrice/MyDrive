@@ -15,16 +15,12 @@ import "reactflow/dist/style.css";
 import Link from "next/link";
 import type { MyDriveItem } from "@/features/mydrive/types";
 
-const TYPE_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  scan:         { label: "Scans",          color: "#3b82f6", bg: "#0f1f3d" },
-  doc:          { label: "Documents",      color: "#6366f1", bg: "#13104a" },
-  mindmap:      { label: "Mindmaps",       color: "#a855f7", bg: "#1a0a3d" },
-  table:        { label: "Tables",         color: "#22c55e", bg: "#052e16" },
-  presentation: { label: "Présentations",  color: "#f97316", bg: "#2c1000" },
-  voyage:       { label: "Voyages",        color: "#14b8a6", bg: "#012a29" },
-  python:       { label: "Python",         color: "#eab308", bg: "#1c1200" },
-  fiche:        { label: "Fiches",         color: "#ec4899", bg: "#2d0a1e" },
-};
+// Palette de couleurs pour les dossiers (cycle si > 10 dossiers)
+const FOLDER_COLORS = [
+  "#3b82f6", "#6366f1", "#a855f7", "#ec4899",
+  "#f97316", "#eab308", "#22c55e", "#14b8a6",
+  "#06b6d4", "#f43f5e",
+];
 
 function getItemUrl(item: MyDriveItem): string {
   const t = item.doc_type || item.type || "scan";
@@ -39,37 +35,48 @@ function getItemUrl(item: MyDriveItem): string {
   }
 }
 
-const ITEM_GAP = 60;
-const TYPE_GAP = 40;
-const TYPE_H   = 44;
-const COL_ROOT = 0;
-const COL_TYPE = 280;
-const COL_ITEM = 560;
+function docLabel(item: MyDriveItem): string {
+  const t = item.doc_type || item.type || "";
+  const icons: Record<string, string> = {
+    scan: "🖼", doc: "📄", mindmap: "🧠", table: "📊",
+    presentation: "📽", voyage: "✈️", python: "🐍", fiche: "🗂",
+  };
+  const icon = icons[t] ?? "📁";
+  const title = item.title.length > 30 ? item.title.slice(0, 27) + "…" : item.title;
+  return `${icon} ${title}`;
+}
+
+const ITEM_GAP = 58;
+const TYPE_GAP = 44;
+const FOLDER_H = 44;
+const COL_ROOT   = 0;
+const COL_FOLDER = 300;
+const COL_ITEM   = 620;
+
+interface FolderNode {
+  id: string;
+  title: string;
+  color: string;
+  count: number;        // nb d'items directs
+  children: MyDriveItem[];
+}
 
 function buildGraph(
-  items: MyDriveItem[],
-  expandedTypes: Set<string>,
+  folders: FolderNode[],
+  expandedFolders: Set<string>,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
-  const groups: Record<string, MyDriveItem[]> = {};
-  for (const item of items) {
-    const key = item.doc_type || item.type || "scan";
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(item);
-  }
-  const types = Object.keys(groups);
-
-  const slotHeights = types.map((t) =>
-    expandedTypes.has(t)
-      ? Math.max(TYPE_H, groups[t].length * ITEM_GAP)
-      : TYPE_H
+  const slotHeights = folders.map((f) =>
+    expandedFolders.has(f.id)
+      ? Math.max(FOLDER_H, f.children.length * ITEM_GAP)
+      : FOLDER_H
   );
   const totalHeight =
-    slotHeights.reduce((a, b) => a + b, 0) + TYPE_GAP * (types.length - 1);
+    slotHeights.reduce((a, b) => a + b, 0) + TYPE_GAP * (folders.length - 1);
 
-  // Nœud racine — connexions droite sortante
+  // Nœud racine MyDrive
   nodes.push({
     id: "root",
     position: { x: COL_ROOT, y: totalHeight / 2 - 55 },
@@ -92,65 +99,62 @@ function buildGraph(
   });
 
   let cursorY = 0;
-  types.forEach((type, ti) => {
-    const slotH = slotHeights[ti];
-    const typeCenterY = cursorY + slotH / 2;
+  folders.forEach((folder, fi) => {
+    const slotH = slotHeights[fi];
+    const centerY = cursorY + slotH / 2;
     cursorY += slotH + TYPE_GAP;
 
-    const cfg = TYPE_CONFIG[type] ?? { label: type, color: "#6b7280", bg: "#1f2937" };
-    const typeId = `type-${type}`;
-    const isOpen = expandedTypes.has(type);
-    const arrow = isOpen ? "▼" : "▶";
+    const color = folder.color;
+    const isOpen = expandedFolders.has(folder.id);
+    const arrow = folder.children.length === 0 ? "·" : isOpen ? "▼" : "▶";
 
-    // Nœud type — connexions gauche entrante, droite sortante
+    // Nœud dossier
     nodes.push({
-      id: typeId,
-      position: { x: COL_TYPE, y: typeCenterY - TYPE_H / 2 },
+      id: folder.id,
+      position: { x: COL_FOLDER, y: centerY - FOLDER_H / 2 },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
-      data: { label: `${arrow} ${cfg.label} (${groups[type].length})`, typeKey: type, isFolder: true },
+      data: { label: `${arrow} ${folder.title} (${folder.count})`, folderId: folder.id, isFolder: true, hasChildren: folder.children.length > 0 },
       style: {
-        background: cfg.bg,
-        color: cfg.color,
-        border: `2px solid ${isOpen ? cfg.color : cfg.color + "99"}`,
+        background: color + "22",
+        color: color,
+        border: `2px solid ${isOpen ? color : color + "88"}`,
         borderRadius: 12,
         padding: "8px 18px",
         fontWeight: 700,
         fontSize: 13,
         whiteSpace: "nowrap",
-        cursor: "pointer",
+        cursor: folder.children.length > 0 ? "pointer" : "default",
       },
     });
 
     edges.push({
-      id: `e-root-${typeId}`,
+      id: `e-root-${folder.id}`,
       source: "root",
-      target: typeId,
+      target: folder.id,
       type: "smoothstep",
-      style: { stroke: cfg.color + (isOpen ? "ff" : "99"), strokeWidth: isOpen ? 2 : 1.5 },
+      style: { stroke: color + (isOpen ? "cc" : "77"), strokeWidth: isOpen ? 2 : 1.5 },
     });
 
-    if (isOpen) {
-      const typeItems = groups[type];
-      const itemsHeight = (typeItems.length - 1) * ITEM_GAP;
-      const itemsStartY = typeCenterY - itemsHeight / 2;
+    if (isOpen && folder.children.length > 0) {
+      const itemsH = (folder.children.length - 1) * ITEM_GAP;
+      const startY = centerY - itemsH / 2;
 
-      typeItems.forEach((item, ii) => {
-        const iy = itemsStartY + ii * ITEM_GAP;
+      folder.children.forEach((item, ii) => {
+        const iy = startY + ii * ITEM_GAP;
         const itemId = `item-${item.id}`;
         const url = getItemUrl(item);
-        const label = item.title.length > 34 ? item.title.slice(0, 31) + "…" : item.title;
 
         nodes.push({
           id: itemId,
           position: { x: COL_ITEM, y: iy - 18 },
           sourcePosition: Position.Right,
           targetPosition: Position.Left,
-          data: { label, url },
+          data: { label: docLabel(item), url },
           style: {
             background: "#111827",
             color: "#e5e7eb",
-            border: `1px solid ${cfg.color}66`,
+            border: `1px solid ${color}55`,
             borderRadius: 8,
             padding: "6px 14px",
             fontSize: 12,
@@ -160,11 +164,11 @@ function buildGraph(
         });
 
         edges.push({
-          id: `e-${typeId}-${itemId}`,
-          source: typeId,
+          id: `e-${folder.id}-${itemId}`,
+          source: folder.id,
           target: itemId,
           type: "smoothstep",
-          style: { stroke: `${cfg.color}88`, strokeWidth: 1 },
+          style: { stroke: `${color}66`, strokeWidth: 1 },
         });
       });
     }
@@ -174,11 +178,57 @@ function buildGraph(
 }
 
 export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
-  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+
+  // Construire la liste de dossiers à partir des items
+  const folders = useMemo<FolderNode[]>(() => {
+    const activeItems = items.filter((i) => !(i as any).deleted_at);
+
+    // Dossiers racine (type="folder", parent_id=null)
+    const rootFolders = activeItems
+      .filter((i) => i.type === "folder" && !i.parent_id)
+      .sort((a, b) => a.title.localeCompare(b.title));
+
+    // Items sans dossier (type≠folder, parent_id=null)
+    const noFolder = activeItems.filter((i) => i.type !== "folder" && !i.parent_id);
+
+    const result: FolderNode[] = [];
+
+    // "Sans dossier" en premier si des items existent
+    if (noFolder.length > 0) {
+      result.push({
+        id: "no-folder",
+        title: "Sans dossier",
+        color: FOLDER_COLORS[0],
+        count: noFolder.length,
+        children: noFolder,
+      });
+    }
+
+    // Vrais dossiers
+    rootFolders.forEach((folder, fi) => {
+      const children = activeItems.filter(
+        (i) => i.parent_id === folder.id && i.type !== "folder"
+      );
+      const subFolderCount = activeItems.filter(
+        (i) => i.parent_id === folder.id && i.type === "folder"
+      ).length;
+
+      result.push({
+        id: folder.id,
+        title: folder.title,
+        color: FOLDER_COLORS[(fi + 1) % FOLDER_COLORS.length],
+        count: children.length + subFolderCount,
+        children,
+      });
+    });
+
+    return result;
+  }, [items]);
 
   const { nodes: computed, edges: computedEdges } = useMemo(
-    () => buildGraph(items, expandedTypes),
-    [items, expandedTypes],
+    () => buildGraph(folders, expandedFolders),
+    [folders, expandedFolders],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(computed);
@@ -190,9 +240,9 @@ export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
   }, [computed, computedEdges, setNodes, setEdges]);
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    if (node.data?.isFolder) {
-      const key = node.data.typeKey as string;
-      setExpandedTypes((prev) => {
+    if (node.data?.isFolder && node.data?.hasChildren) {
+      const key = node.data.folderId as string;
+      setExpandedFolders((prev) => {
         const next = new Set(prev);
         next.has(key) ? next.delete(key) : next.add(key);
         return next;
@@ -222,11 +272,8 @@ export default function FolderMindmap({ items }: { items: MyDriveItem[] }) {
           style={{ background: "#111", border: "1px solid #374151" }}
           nodeColor={(n) => {
             if (n.id === "root") return "#22c55e";
-            if (n.id.startsWith("type-")) {
-              const t = n.id.replace("type-", "");
-              return TYPE_CONFIG[t]?.color ?? "#6b7280";
-            }
-            return "#374151";
+            const f = folders.find((f) => f.id === n.id);
+            return f?.color ?? "#374151";
           }}
         />
       </ReactFlow>
