@@ -277,6 +277,30 @@ function buildGraph(
   });
 
   placeNodes(roots, exp, hovered, T, rfNodes, rfEdges, "root", 0, 0);
+
+  // Nœud "+" racine — créer un nouveau dossier/item à la racine
+  const endY = roots.reduce((acc, r) => acc + slotH(r, exp) + CHILD_GAP, 0);
+  rfNodes.push({
+    id: "add-root",
+    position: { x: COL_ROOT + COL_GAP, y: endY },
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+    data: { label: "+ Ajouter", isAdd: true, folderId: null },
+    style: {
+      background: "transparent", color: "#22c55e",
+      border: "1.5px dashed #22c55e99",
+      borderRadius: 8, padding: "6px 16px",
+      fontSize: 12, cursor: "pointer",
+      fontWeight: 600, whiteSpace: "nowrap",
+      opacity: 0.75,
+    },
+  });
+  rfEdges.push({
+    id: "e-root-add-root",
+    source: "root", target: "add-root", type: "smoothstep",
+    style: { stroke: "#22c55e44", strokeWidth: 1, strokeDasharray: "4 3" },
+  });
+
   return { nodes: rfNodes, edges: rfEdges };
 }
 
@@ -490,15 +514,13 @@ export default function FolderMindmap({ items: init }: { items: MyDriveItem[] })
                 Dans le dossier sélectionné
               </div>
             )}
-            {/* Dossier en premier si on est dans un contexte dossier */}
-            {createInFolder && (
-              <button
-                onClick={() => handleCreateInFolder("folder", "", createInFolder)}
-                style={{ background: "transparent", color: T.menuText, border: "none", padding: "10px 20px", fontSize: 14, textAlign: "left", cursor: "pointer", borderRadius: 8, whiteSpace: "nowrap" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = T.menuHover)}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-              >📁 Sous-dossier</button>
-            )}
+            {/* Dossier toujours disponible (racine ou sous-dossier) */}
+            <button
+              onClick={() => handleCreateInFolder("folder", "", createInFolder)}
+              style={{ background: "transparent", color: T.menuText, border: "none", padding: "10px 20px", fontSize: 14, textAlign: "left", cursor: "pointer", borderRadius: 8, whiteSpace: "nowrap" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = T.menuHover)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >{createInFolder ? "📁 Sous-dossier" : "📁 Dossier"}</button>
             {CREATE_OPTIONS.map((opt) => (
               <button key={opt.url}
                 onClick={() => handleCreateInFolder(opt.label, opt.url, createInFolder)}
