@@ -15,54 +15,8 @@ function href(url: string): string {
 
 const SECTIONS: Section[] = [
   {
-    links: [{ label: "MyDrive", url: "mydrive.bricematter.com" }],
-  },
-  {
-    title: "IA",
-    links: [
-      { label: "Management", url: "management.gennn.live" },
-      { label: "News", url: "www.gennn.live" },
-      { label: "Studio", url: "studio.gennn.live" },
-      { label: "Conseil", url: "conseil.gennn.live" },
-      { label: "Formation", url: "formation.gennn.live" },
-    ],
-  },
-  {
-    title: "Média B2B",
-    links: [
-      { label: "Nouvo Media", url: "nouvo.media" },
-      { label: "Numactu", url: "numactu.fr" },
-      { label: "Gennn", url: "www.gennn.live" },
-      { label: "DroitSocial", url: "droitsocialactu.com" },
-      { label: "Piactu", url: "piactu.fr" },
-      { label: "Formation Nouvo Media", url: "formation.nouvo.media" },
-    ],
-  },
-  {
-    title: "Média B2C",
-    links: [
-      { label: "TTTrip", url: "tttrip.live" },
-      { label: "Orrors", url: "orrors.com" },
-    ],
-  },
-  {
-    title: "Work In Progress",
-    links: [
-      { label: "Agentic", url: "agentic.gennn.live" },
-      { label: "Gennn Press", url: "press.gennn.live" },
-      { label: "Grab the Grail", url: "grabthegrail.com" },
-      { label: "MyChat", url: "mychat.bricematter.com" },
-      { label: "TopShoperz", url: "topshoperz.com" },
-    ],
-  },
-  {
-    title: "Tools",
-    links: [
-      { label: "Claude Code", url: "https://claude.ai/code" },
-      { label: "Vercel Deployment", url: "https://vercel.com/bricems-projects/photo-app/deployments" },
-      { label: "Github", url: "www.github.com" },
-      { label: "Gandi", url: "www.gandi.net" },
-    ],
+    title: "APP",
+    links: [{ label: "APP", url: "https://app.gennn.live/login" }],
   },
 ];
 
@@ -94,7 +48,7 @@ export default function SiteFooter() {
 
   return (
     <footer className="mt-16 border-t border-neutral-800 bg-neutral-950/60 px-6 py-10 text-sm">
-      <div className="mx-auto max-w-5xl grid gap-8 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="mx-auto max-w-5xl flex flex-wrap gap-12">
         {SECTIONS.map((section, i) => (
           <div key={i} className="space-y-2">
             {section.title && (
