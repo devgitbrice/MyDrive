@@ -31,6 +31,7 @@ export function getEditUrl(item: SearchResult): string {
     case "draw": return `/editdraw/${item.id}`;
     case "fiche": return `/editfiche/${item.id}`;
     case "data": return `/editdata/${item.id}`;
+    case "tasks": return `/edittasks/${item.id}`;
     default: return `/mydrive`;
   }
 }

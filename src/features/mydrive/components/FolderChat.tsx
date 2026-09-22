@@ -2,11 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { Sparkles, X, Send, Bot } from "lucide-react";
+import { Sparkles, X, Send, Bot, Mic, Ear } from "lucide-react";
 import type { MyDriveItem } from "@/features/mydrive/types";
 import { authFetch } from "@/lib/authFetch";
 import { createFolder } from "@/features/mydrive/lib/folders";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
+import { useVoiceDictation } from "@/hooks/useVoiceDictation";
+import { useTTS } from "@/hooks/useTTS";
 
 // Mêmes modèles que le chat de l'éditeur de documents (API OpenAI disponible)
 const MODELS = [
@@ -53,6 +56,85 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
   const [width, setWidth] = useState(420);
   const widthRef = useRef(420);
   const draggingRef = useRef(false);
+
+  // ---- Voix : micro (dictée) et oreille (conversation live) ----
+  const { state: ttsState, speak, stopPlayback } = useTTS();
+  const [earMode, setEarMode] = useState(false);
+  const earRef = useRef(false);
+  const earBufferRef = useRef("");
+  const earSendingRef = useRef(false);
+  const earTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dictTargetRef = useRef<"input" | "ear">("input");
+  const inputBaseRef = useRef("");
+  const dictRef = useRef<{ toggle: () => void; stop: () => void } | null>(null);
+  const sendRef = useRef<(t?: string) => void>(() => {});
+
+  const dictation = useVoiceDictation((text) => {
+    if (dictTargetRef.current === "ear") {
+      if (earSendingRef.current) return;
+      earBufferRef.current = text;
+      setInput(text);
+      if (earTimerRef.current) clearTimeout(earTimerRef.current);
+      // 2 s de silence → on envoie la phrase et on agit immédiatement.
+      earTimerRef.current = setTimeout(() => {
+        const t = earBufferRef.current.trim();
+        if (!t) return;
+        earSendingRef.current = true;
+        earBufferRef.current = "";
+        dictRef.current?.stop();
+        setInput("");
+        sendRef.current(t);
+      }, 2000);
+    } else {
+      setInput(inputBaseRef.current + text);
+    }
+  });
+  dictRef.current = dictation;
+
+  const startEarListening = () => {
+    dictTargetRef.current = "ear";
+    earSendingRef.current = false;
+    earBufferRef.current = "";
+    setInput("");
+    if (dictation.state === "idle" || dictation.state === "error") dictation.toggle();
+  };
+
+  const toggleEar = () => {
+    if (earRef.current) {
+      earRef.current = false;
+      setEarMode(false);
+      if (earTimerRef.current) clearTimeout(earTimerRef.current);
+      dictation.stop();
+      stopPlayback();
+      dictTargetRef.current = "input";
+      setInput("");
+    } else {
+      earRef.current = true;
+      setEarMode(true);
+      startEarListening();
+    }
+  };
+
+  const toggleMic = () => {
+    if (earRef.current) return; // le mode oreille gère déjà le micro
+    if (dictation.state === "recording" || dictation.state === "connecting") {
+      dictation.stop();
+    } else {
+      dictTargetRef.current = "input";
+      inputBaseRef.current = input ? input.replace(/\s+$/, "") + " " : "";
+      dictation.toggle();
+    }
+  };
+
+  // Fermeture / démontage : tout couper.
+  useEffect(() => {
+    return () => {
+      earRef.current = false;
+      if (earTimerRef.current) clearTimeout(earTimerRef.current);
+      dictRef.current?.stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const single = docs.length === 1;
 
@@ -139,8 +221,8 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
     historyRef.current = [];
   }, [sourceKey]);
 
-  async function send() {
-    const q = input.trim();
+  async function send(textOverride?: string) {
+    const q = (textOverride ?? input).trim();
     if (!q || loading) return;
     setInput("");
     setMessages((prev) => [...prev, { role: "user", text: q }]);
@@ -162,33 +244,67 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
       if (!res.ok) throw new Error(data?.error || `Erreur ${res.status}`);
       let reply = String(data.reply || "");
 
-      // Actions renvoyées par l'IA : création de dossiers dans le dossier courant.
-      const actions: { type: string; name: string }[] = Array.isArray(data.actions) ? data.actions : [];
-      if (actions.length > 0) {
-        if (createInFolderId === undefined) {
-          reply += "\n\n⚠️ Création de dossier indisponible depuis ce chat.";
-        } else {
-          for (const a of actions) {
-            if (a.type !== "create_folder" || !a.name) continue;
-            try {
-              await createFolder(a.name, createInFolderId);
-              reply += `\n\n📁 Dossier **« ${a.name} »** créé.`;
-            } catch (err: any) {
-              reply += `\n\n⚠️ Impossible de créer « ${a.name} » : ${err?.message || "erreur"}`;
-            }
+      // Actions renvoyées par l'IA, exécutées ici (création/modification).
+      const actions: any[] = Array.isArray(data.actions) ? data.actions : [];
+      const parentId = createInFolderId === undefined ? null : createInFolderId;
+      const docIdSet = new Set(docs.map((d) => d.id));
+      for (const a of actions) {
+        try {
+          if (a.type === "create_folder" && a.name) {
+            await createFolder(a.name, parentId);
+            reply += `\n\n📁 Dossier **« ${a.name} »** créé.`;
+          } else if (a.type === "create_task_doc" && a.title) {
+            const { error } = await supabase.from("MyDrive").insert({
+              title: a.title,
+              content: JSON.stringify({ tasks: (a.tasks || []).map((t: any, i: number) => ({ id: `t${Date.now().toString(36)}${i}`, title: t.title, deadline: t.deadline || null, done: t.done === true })) }),
+              observation: "", image_path: "", image_url: "",
+              doc_type: "tasks", parent_id: parentId,
+            });
+            if (error) throw error;
+            reply += `\n\n✅ Document de tâches **« ${a.title} »** créé (${(a.tasks || []).length} tâche${(a.tasks || []).length > 1 ? "s" : ""}).`;
+          } else if (a.type === "update_tasks" && a.id && docIdSet.has(a.id)) {
+            const { error } = await supabase.from("MyDrive").update({
+              content: JSON.stringify({ tasks: (a.tasks || []).map((t: any, i: number) => ({ id: `t${Date.now().toString(36)}${i}`, title: t.title, deadline: t.deadline || null, done: t.done === true })) }),
+            }).eq("id", a.id);
+            if (error) throw error;
+            reply += "\n\n✅ Tâches mises à jour.";
+          } else if (a.type === "create_table" && a.title && a.cells) {
+            const { error } = await supabase.from("MyDrive").insert({
+              title: a.title,
+              content: JSON.stringify(a.cells),
+              observation: "", image_path: "", image_url: "",
+              doc_type: "table", parent_id: parentId,
+            });
+            if (error) throw error;
+            reply += `\n\n📊 Tableau **« ${a.title} »** créé (${a.cells.length} ligne${a.cells.length > 1 ? "s" : ""}).`;
+          } else if (a.type === "update_table" && a.id && a.cells && docIdSet.has(a.id)) {
+            const { error } = await supabase.from("MyDrive").update({ content: JSON.stringify(a.cells) }).eq("id", a.id);
+            if (error) throw error;
+            reply += "\n\n📊 Tableau mis à jour.";
           }
-          router.refresh();
+        } catch (err: any) {
+          reply += `\n\n⚠️ Action impossible : ${err?.message || "erreur"}`;
         }
       }
+      if (actions.length > 0) router.refresh();
       setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
       const exchange: Msg[] = [{ role: "user", text: q }, { role: "assistant", text: reply }];
       historyRef.current = [...historyRef.current, ...exchange].slice(-20);
+      // Mode oreille : lire la réponse à voix haute puis se remettre à écouter.
+      if (earRef.current) {
+        const spoken = reply.replace(/[*_#`]/g, "").replace(/\n+/g, ". ").slice(0, 800);
+        speak(spoken).then(() => {
+          if (earRef.current) startEarListening();
+        });
+      }
     } catch (e: any) {
       setMessages((prev) => [...prev, { role: "assistant", text: "⚠️ " + (e?.message || "Erreur inconnue") }]);
+      if (earRef.current) startEarListening();
     } finally {
       setLoading(false);
     }
   }
+  sendRef.current = send;
 
   if (!open) return null;
 
@@ -268,6 +384,31 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
         </div>
 
         <div className="p-3 border-t border-neutral-800 flex items-end gap-2">
+          <button
+            onClick={toggleMic}
+            disabled={earMode}
+            className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center border transition-colors disabled:opacity-40 ${
+              !earMode && (dictation.state === "recording" || dictation.state === "connecting")
+                ? "bg-red-600 border-red-500 text-white animate-pulse"
+                : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-purple-500"
+            }`}
+            title="Dicter (la transcription remplit le champ)"
+            aria-label="Micro : dictée vocale"
+          >
+            <Mic size={16} />
+          </button>
+          <button
+            onClick={toggleEar}
+            className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center border transition-colors ${
+              earMode
+                ? "bg-purple-600 border-purple-500 text-white animate-pulse"
+                : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-purple-500"
+            }`}
+            title="Discussion live : parle, l'IA répond à voix haute et agit immédiatement"
+            aria-label="Oreille : discussion vocale live"
+          >
+            <Ear size={16} />
+          </button>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -275,11 +416,15 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
             }}
             rows={2}
-            placeholder={single ? "Ta question sur ce document…" : "Ta question sur ce dossier…"}
+            placeholder={
+              earMode
+                ? (loading ? "Je réfléchis…" : ttsState === "playing" ? "Je te réponds…" : "🎙️ Je t'écoute — parle, je fais.")
+                : single ? "Ta question sur ce document…" : "Ta question sur ce dossier…"
+            }
             className="flex-1 resize-none bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-purple-500"
           />
           <button
-            onClick={send}
+            onClick={() => send()}
             disabled={!input.trim() || loading}
             className="w-10 h-10 shrink-0 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white flex items-center justify-center"
             aria-label="Envoyer"

@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
       }
       if (!body && d.observation) body = "";
       const obs = d.observation ? `\nDescription : ${String(d.observation).slice(0, 1000)}` : "";
-      const block = `\n\n===== Document : « ${title} »${d.doc_type ? ` (${d.doc_type})` : ""} =====${obs}\n${body || "(contenu non lisible)"}\n===== fin de « ${title} » =====`;
+      const block = `\n\n===== Document : « ${title} »${d.doc_type ? ` (${d.doc_type})` : ""} [id: ${d.id}] =====${obs}\n${body || "(contenu non lisible)"}\n===== fin de « ${title} » =====`;
       context += block;
       total += block.length;
     }
@@ -158,10 +158,13 @@ export async function POST(req: NextRequest) {
           "On te fournit le contenu des documents du dossier ouvert : tes réponses doivent s'appuyer UNIQUEMENT sur ces documents. " +
           "Cite le titre du ou des documents sur lesquels tu t'appuies (ex. « D'après “Avis d'appel octobre 2026”… »). " +
           "Si l'information demandée ne figure dans aucun document du dossier, dis-le clairement au lieu d'inventer. " +
-          "ACTIONS : tu peux créer des dossiers dans le dossier ouvert quand l'utilisateur le demande explicitement. " +
-          "Pour chaque dossier à créer, termine ta réponse par une balise exactement de la forme " +
-          '<action>{"type":"create_folder","name":"Nom du dossier"}</action> (une balise par dossier). ' +
-          "N'utilise JAMAIS cette balise sans demande explicite de création. " +
+          "ACTIONS : quand l'utilisateur demande explicitement une création ou une modification, termine ta réponse par une ou plusieurs balises <action>…</action> (une par action, JSON strict à l'intérieur) : " +
+          '1. Créer un dossier : <action>{"type":"create_folder","name":"Nom"}</action>. ' +
+          '2. Créer un document de tâches : <action>{"type":"create_task_doc","title":"Titre","tasks":[{"title":"Tâche 1","deadline":"2026-10-01"},{"title":"Tâche 2"}]}</action> (deadline optionnelle, format YYYY-MM-DD ; toutes les tâches démarrent non faites). ' +
+          '3. Remplacer les tâches d\'un document de tâches existant (cocher/décocher/ajouter/retirer : renvoie la LISTE COMPLÈTE mise à jour) : <action>{"type":"update_tasks","id":"<id du document>","tasks":[{"title":"…","deadline":null,"done":true}]}</action>. ' +
+          '4. Créer un tableau : <action>{"type":"create_table","title":"Titre","cells":[["En-tête A","En-tête B"],["l1A","l1B"]]}</action> (cells = grille de lignes de textes). ' +
+          '5. Remplacer le contenu d\'un tableau existant (ajouter des lignes/colonnes, trier, corriger : renvoie la GRILLE COMPLÈTE mise à jour en conservant ce qui ne change pas) : <action>{"type":"update_table","id":"<id du document>","cells":[["…"]]}</action>. ' +
+          "Les id des documents sont indiqués dans le contexte ([id: …]). Utilise les balises UNIQUEMENT sur demande explicite, jamais de ta propre initiative. Décris toujours en une phrase ce que tu fais avant les balises. " +
           "Réponds en français, de façon concise et factuelle (dates, montants, noms exacts).",
       },
       ...((history || []) as { role: string; text: string }[]).slice(-10).map((m) => ({
@@ -194,20 +197,48 @@ export async function POST(req: NextRequest) {
     const raw: string = data.choices?.[0]?.message?.content || "";
     if (!raw) return NextResponse.json({ error: "Réponse vide de l'IA." }, { status: 502 });
 
-    // Actions demandées par l'IA (création de dossiers), exécutées côté client.
-    const actions: { type: string; name: string }[] = [];
+    // Actions demandées par l'IA, validées ici et exécutées côté client.
+    const knownIds = new Set(list.map((d) => String(d.id)));
+    const sanitizeTasks = (arr: any): { title: string; deadline: string | null; done: boolean }[] =>
+      (Array.isArray(arr) ? arr : [])
+        .filter((t: any) => t && typeof t.title === "string" && t.title.trim())
+        .slice(0, 100)
+        .map((t: any) => ({
+          title: String(t.title).trim().slice(0, 300),
+          deadline: /^\d{4}-\d{2}-\d{2}$/.test(String(t.deadline || "")) ? String(t.deadline) : null,
+          done: t.done === true,
+        }));
+    const sanitizeCells = (arr: any): string[][] | null => {
+      if (!Array.isArray(arr) || arr.length === 0 || arr.length > 300) return null;
+      const out = arr.slice(0, 300).map((row: any) =>
+        (Array.isArray(row) ? row : [row]).slice(0, 40).map((c: any) => String(c ?? "").slice(0, 2000))
+      );
+      return out;
+    };
+
+    const actions: any[] = [];
     for (const m of raw.matchAll(/<action>([\s\S]*?)<\/action>/g)) {
       try {
         const a = JSON.parse(m[1]);
         if (a?.type === "create_folder" && typeof a.name === "string" && a.name.trim()) {
           actions.push({ type: "create_folder", name: a.name.trim().slice(0, 120) });
+        } else if (a?.type === "create_task_doc" && typeof a.title === "string" && a.title.trim()) {
+          actions.push({ type: "create_task_doc", title: a.title.trim().slice(0, 150), tasks: sanitizeTasks(a.tasks) });
+        } else if (a?.type === "update_tasks" && knownIds.has(String(a.id))) {
+          actions.push({ type: "update_tasks", id: String(a.id), tasks: sanitizeTasks(a.tasks) });
+        } else if (a?.type === "create_table" && typeof a.title === "string" && a.title.trim()) {
+          const cells = sanitizeCells(a.cells);
+          if (cells) actions.push({ type: "create_table", title: a.title.trim().slice(0, 150), cells });
+        } else if (a?.type === "update_table" && knownIds.has(String(a.id))) {
+          const cells = sanitizeCells(a.cells);
+          if (cells) actions.push({ type: "update_table", id: String(a.id), cells });
         }
       } catch {}
     }
     const reply = raw.replace(/<action>[\s\S]*?<\/action>/g, "").trim() ||
       (actions.length ? "C'est fait." : raw);
 
-    return NextResponse.json({ reply, actions: actions.slice(0, 5), model });
+    return NextResponse.json({ reply, actions: actions.slice(0, 8), model });
   } catch (e) {
     console.error("folder-assistant error:", e);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
