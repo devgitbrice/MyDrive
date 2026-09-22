@@ -17,6 +17,12 @@ const DEFAULT_MODEL = "gpt-5.6-terra";
 
 type Msg = { role: "user" | "assistant"; text: string };
 
+// Largeur du panneau bornée : minimum lisible, maximum 70 % de l'écran.
+function clampWidth(w: number): number {
+  const max = Math.round(window.innerWidth * 0.7);
+  return Math.min(Math.max(w, 280), Math.max(max, 280));
+}
+
 interface PanelProps {
   open: boolean;
   onClose: () => void;
@@ -37,6 +43,11 @@ export function DocAiPanel({ open, onClose, title, docs }: PanelProps) {
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<Msg[]>([]);
+  // Vue scindée : largeur du panneau (1/3 de l'écran par défaut), réglable
+  // en glissant le bord gauche. Mémorisée entre les sessions.
+  const [width, setWidth] = useState(420);
+  const widthRef = useRef(420);
+  const draggingRef = useRef(false);
 
   const single = docs.length === 1;
 
@@ -45,7 +56,72 @@ export function DocAiPanel({ open, onClose, title, docs }: PanelProps) {
       const saved = localStorage.getItem("mydrive-chat-model");
       if (saved && MODELS.some((m) => m.id === saved)) setModel(saved);
     } catch {}
+    try {
+      const w = parseInt(localStorage.getItem("mydrive-chat-width") || "", 10);
+      const fallback = Math.round(window.innerWidth / 3);
+      const initial = Number.isFinite(w) && w >= 280 ? w : fallback;
+      setWidth(clampWidth(initial));
+    } catch {
+      setWidth(clampWidth(Math.round(window.innerWidth / 3)));
+    }
   }, []);
+
+  useEffect(() => { widthRef.current = width; }, [width]);
+
+  // Scinde la fenêtre : le contenu de gauche est repoussé de la largeur du panneau.
+  useEffect(() => {
+    if (!open) return;
+    const isDesktop = () => window.matchMedia("(min-width: 640px)").matches;
+    const apply = () => {
+      document.body.style.paddingRight = isDesktop() ? `${widthRef.current}px` : "";
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      document.body.style.paddingRight = "";
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (window.matchMedia("(min-width: 640px)").matches) {
+      document.body.style.paddingRight = `${width}px`;
+    }
+  }, [width, open]);
+
+  // Glisser-déposer de la limite gauche du panneau.
+  useEffect(() => {
+    const move = (clientX: number) => {
+      if (!draggingRef.current) return;
+      setWidth(clampWidth(window.innerWidth - clientX));
+    };
+    const onMouseMove = (e: MouseEvent) => move(e.clientX);
+    const onTouchMove = (e: TouchEvent) => move(e.touches[0]?.clientX ?? 0);
+    const stop = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      try { localStorage.setItem("mydrive-chat-width", String(widthRef.current)); } catch {}
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", stop);
+    window.addEventListener("touchmove", onTouchMove);
+    window.addEventListener("touchend", stop);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", stop);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", stop);
+    };
+  }, []);
+
+  const startDrag = () => {
+    draggingRef.current = true;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+  };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -93,10 +169,22 @@ export function DocAiPanel({ open, onClose, title, docs }: PanelProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[9998]" role="dialog" aria-label="Assistant IA">
-      {/* Fond cliquable pour fermer (mobile surtout) */}
-      <div className="absolute inset-0 bg-black/50 md:bg-transparent" onClick={onClose} />
-      <div className="absolute right-0 top-0 h-full w-full sm:w-[420px] bg-neutral-950 border-l border-neutral-800 shadow-2xl flex flex-col">
+    <div className="fixed inset-0 z-[9998] pointer-events-none" role="dialog" aria-label="Assistant IA">
+      {/* Mobile : fond cliquable pour fermer. Desktop : la page reste utilisable (vue scindée). */}
+      <div className="absolute inset-0 bg-black/50 sm:hidden pointer-events-auto" onClick={onClose} />
+      <div
+        className="pointer-events-auto absolute right-0 top-0 h-full bg-neutral-950 border-l border-neutral-800 shadow-2xl flex flex-col max-sm:!w-full"
+        style={{ width }}
+      >
+        {/* Poignée : glisser pour déplacer la limite gauche/droite */}
+        <div
+          onMouseDown={(e) => { e.preventDefault(); startDrag(); }}
+          onTouchStart={() => startDrag()}
+          className="hidden sm:flex absolute left-0 top-0 h-full w-2 -ml-1 cursor-col-resize items-center justify-center group/handle z-10"
+          title="Glisser pour redimensionner"
+        >
+          <div className="h-16 w-1 rounded-full bg-neutral-700 group-hover/handle:bg-purple-500 transition-colors" />
+        </div>
         <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-800">
           {single ? <Bot size={16} className="text-purple-400 shrink-0" /> : <Sparkles size={16} className="text-purple-400 shrink-0" />}
           <div className="flex-1 min-w-0">
