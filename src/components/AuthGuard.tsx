@@ -38,14 +38,22 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
     // Rafraîchit le jeton dès que l'app redevient visible (iOS coupe le
     // refresh auto en arrière-plan → sinon "Load failed" au retour).
+    // Garde anti-rafale : focus + visibilitychange se déclenchent souvent
+    // ensemble, et deux refresh parallèles avec le même jeton provoquent une
+    // révocation en chaîne côté Supabase (boucle de déconnexion + 429).
+    let refreshing = false;
+    let lastRefresh = 0;
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
+      if (refreshing || Date.now() - lastRefresh < 30_000) return;
       supabase.auth.getSession().then(({ data }) => {
         if (!data.session) return;
         const exp = (data.session.expires_at ?? 0) * 1000;
         // Si le token expire dans moins de 2 min (ou est expiré), on le renouvelle.
-        if (exp - Date.now() < 120_000) {
-          supabase.auth.refreshSession().catch(() => {});
+        if (exp - Date.now() < 120_000 && !refreshing) {
+          refreshing = true;
+          lastRefresh = Date.now();
+          supabase.auth.refreshSession().catch(() => {}).finally(() => { refreshing = false; });
         }
       });
     };
