@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { toast } from "@/components/Toaster";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Folder as FolderIcon, FolderPlus, ChevronRight, Home, Trash2, Pencil, Link2, Search, Clock, RotateCcw, LayoutGrid, List } from "lucide-react";
+import { Folder as FolderIcon, FolderPlus, ChevronRight, Home, Trash2, Pencil, Link2, Search, Clock, RotateCcw, LayoutGrid, List, Bot } from "lucide-react";
 import type { MyDriveItem, Tag } from "@/features/mydrive/types";
 import { createFolder, moveItem, deleteFolder, renameFolder } from "@/features/mydrive/lib/folders";
 import { createMirror, mirrorBlocker } from "@/features/mydrive/lib/mirror";
@@ -16,7 +16,7 @@ import { useItemCodes } from "./ItemCodeProvider";
 import { codeFromId } from "@/features/mydrive/lib/itemCode";
 import { playClick } from "@/lib/clickSound";
 import UpcomingPayments from "./UpcomingPayments";
-import FolderChat from "./FolderChat";
+import FolderChat, { DocAiPanel } from "./FolderChat";
 
 const UNFILED = "__unfiled__";
 const TRASH = "__trash__";
@@ -247,6 +247,24 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
     if (!pid) return "Sans dossier";
     return foldersById.get(pid)?.title ?? "?";
   };
+
+  // Chat IA sur tout le contenu d'un dossier (bouton robot au survol)
+  const [chatFolder, setChatFolder] = useState<MyDriveItem | null>(null);
+  // Documents d'un dossier, sous-dossiers compris.
+  function docsInFolder(fid: string): MyDriveItem[] {
+    const folderIds = new Set<string>([fid]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      items.forEach((i: any) => {
+        if (i.type === "folder" && folderIds.has(i.parent_id) && !folderIds.has(i.id)) {
+          folderIds.add(i.id);
+          changed = true;
+        }
+      });
+    }
+    return items.filter((i: any) => i.type !== "folder" && i.type !== "pending" && folderIds.has(i.parent_id));
+  }
 
   // Vue des dossiers : grille (par défaut) ou liste, mémorisée.
   const [folderView, setFolderView] = useState<"grid" | "list">("grid");
@@ -562,6 +580,13 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
                     <ItemCodeBadge id={f.id} variant="inline" editable={false} />
                     <div className="hidden group-hover:flex gap-1 shrink-0">
                       <button
+                        onClick={(e) => { e.preventDefault(); setChatFolder(f); }}
+                        className="w-7 h-7 rounded bg-neutral-800/90 hover:bg-purple-600 text-neutral-300 hover:text-white flex items-center justify-center"
+                        title="Demander à l'IA sur ce dossier"
+                      >
+                        <Bot size={13} />
+                      </button>
+                      <button
                         onClick={(e) => { e.preventDefault(); setPicker({ mode: "mirror", item: f }); }}
                         className="w-7 h-7 rounded bg-neutral-800/90 hover:bg-purple-600 text-neutral-300 hover:text-white flex items-center justify-center"
                         title="Créer un miroir dans…"
@@ -657,6 +682,13 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
                   <ItemCodeBadge id={f.id} />
                 </div>
                 <div className="absolute top-2 right-2 hidden group-hover:flex gap-1">
+                  <button
+                    onClick={(e) => { e.preventDefault(); setChatFolder(f); }}
+                    className="w-7 h-7 rounded bg-neutral-800/90 hover:bg-purple-600 text-neutral-300 hover:text-white flex items-center justify-center"
+                    title="Demander à l'IA sur ce dossier"
+                  >
+                    <Bot size={13} />
+                  </button>
                   <button
                     onClick={(e) => { e.preventDefault(); setPicker({ mode: "mirror", item: f }); }}
                     className="w-7 h-7 rounded bg-neutral-800/90 hover:bg-purple-600 text-neutral-300 hover:text-white flex items-center justify-center"
@@ -800,6 +832,16 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
 
       {folderId === null && currentSubfolders.length === 0 && !showUnfiledTile && (
         <p className="text-center text-neutral-500 py-8">Aucun dossier pour le moment. Crée-en un !</p>
+      )}
+
+      {chatFolder && (
+        <DocAiPanel
+          key={chatFolder.id}
+          open
+          onClose={() => setChatFolder(null)}
+          title={chatFolder.title || "Dossier"}
+          docs={docsInFolder(chatFolder.id)}
+        />
       )}
 
       {picker && (
