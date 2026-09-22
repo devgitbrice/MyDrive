@@ -127,6 +127,27 @@ body.theme-light .text-neutral-100,
 body.theme-light .text-neutral-200 {
   color: #171717 !important;
 }
+/* Prose (react-markdown des chats) : prose-invert est calibré pour fond
+   sombre → en mode clair on repeint ses variables, sinon les gras/chiffres
+   restent blancs sur bulle blanche (illisibles). */
+body.theme-light .prose-invert {
+  --tw-prose-invert-body: #171717;
+  --tw-prose-invert-headings: #111111;
+  --tw-prose-invert-lead: #262626;
+  --tw-prose-invert-links: #1d4ed8;
+  --tw-prose-invert-bold: #111111;
+  --tw-prose-invert-counters: #52525b;
+  --tw-prose-invert-bullets: #71717a;
+  --tw-prose-invert-hr: #d4d4d8;
+  --tw-prose-invert-quotes: #262626;
+  --tw-prose-invert-quote-borders: #d4d4d8;
+  --tw-prose-invert-captions: #52525b;
+  --tw-prose-invert-code: #7e22ce;
+  --tw-prose-invert-pre-code: #171717;
+  --tw-prose-invert-pre-bg: #f4f4f5;
+  --tw-prose-invert-th-borders: #d4d4d8;
+  --tw-prose-invert-td-borders: #e4e4e7;
+}
 body.theme-light .text-neutral-300 { color: #262626 !important; }
 body.theme-light .text-neutral-400 { color: #52525b !important; }
 body.theme-light .text-neutral-500 { color: #71717a !important; }

@@ -143,7 +143,7 @@ export default function FolderChat({ folderTitle, docs }: Props) {
                   className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm break-words ${
                     m.role === "user"
                       ? "ml-auto bg-purple-600 text-white whitespace-pre-wrap"
-                      : "mr-auto bg-neutral-900 border border-neutral-800 text-neutral-100 prose prose-invert prose-sm prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-1.5 prose-headings:text-sm prose-table:my-1 prose-th:px-2 prose-th:py-1 prose-td:px-2 prose-td:py-1 prose-pre:my-1 prose-code:text-purple-300 prose-strong:text-white max-w-[90%]"
+                      : "mr-auto bg-neutral-900 border border-neutral-800 text-neutral-100 prose prose-invert prose-sm prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-1.5 prose-headings:text-sm prose-table:my-1 prose-th:px-2 prose-th:py-1 prose-td:px-2 prose-td:py-1 prose-pre:my-1 max-w-[90%]"
                   }`}
                 >
                   {m.role === "user" ? m.text : <ReactMarkdown>{m.text}</ReactMarkdown>}
