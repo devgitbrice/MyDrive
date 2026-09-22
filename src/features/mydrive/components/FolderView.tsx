@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { toast } from "@/components/Toaster";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Folder as FolderIcon, FolderPlus, ChevronRight, Home, Trash2, Pencil, Link2, Search, Clock, RotateCcw } from "lucide-react";
+import { Folder as FolderIcon, FolderPlus, ChevronRight, Home, Trash2, Pencil, Link2, Search, Clock, RotateCcw, LayoutGrid, List } from "lucide-react";
 import type { MyDriveItem, Tag } from "@/features/mydrive/types";
 import { createFolder, moveItem, deleteFolder, renameFolder } from "@/features/mydrive/lib/folders";
 import { createMirror, mirrorBlocker } from "@/features/mydrive/lib/mirror";
@@ -248,6 +248,19 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
     return foldersById.get(pid)?.title ?? "?";
   };
 
+  // Vue des dossiers : grille (par défaut) ou liste, mémorisée.
+  const [folderView, setFolderView] = useState<"grid" | "list">("grid");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("mydrive-folder-view");
+      if (saved === "list" || saved === "grid") setFolderView(saved);
+    } catch {}
+  }, []);
+  const changeFolderView = (v: "grid" | "list") => {
+    setFolderView(v);
+    try { localStorage.setItem("mydrive-folder-view", v); } catch {}
+  };
+
   // Mode d'affichage courant de la galerie, pour les pending en liste (#19)
   const [galleryViewMode, setGalleryViewMode] = useState<"grid" | "list">("grid");
   useEffect(() => {
@@ -473,6 +486,120 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
       {folderId === null && <UpcomingPayments />}
 
       {(currentSubfolders.length > 0 || showUnfiledTile) && (
+        <div className="space-y-2">
+          {/* Bascule grille / liste pour les dossiers */}
+          <div className="flex justify-end gap-1">
+            <button
+              onClick={() => changeFolderView("grid")}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-colors ${folderView === "grid" ? "bg-neutral-800 border-neutral-600 text-white" : "border-neutral-800 text-neutral-500 hover:text-white"}`}
+              title="Vue grille"
+            >
+              <LayoutGrid size={15} />
+            </button>
+            <button
+              onClick={() => changeFolderView("list")}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-colors ${folderView === "list" ? "bg-neutral-800 border-neutral-600 text-white" : "border-neutral-800 text-neutral-500 hover:text-white"}`}
+              title="Vue liste"
+            >
+              <List size={15} />
+            </button>
+          </div>
+
+          {folderView === "list" ? (
+            <div className="flex flex-col divide-y divide-neutral-800/70 border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900">
+              {showUnfiledTile && (
+                <Link
+                  href={`/mydrive?folder=${UNFILED}`}
+                  scroll={false}
+                  onClick={() => playClick()}
+                  onDragOver={(e) => { e.preventDefault(); setDragOverId("__ROOT__"); }}
+                  onDragLeave={() => setDragOverId((v) => v === "__ROOT__" ? null : v)}
+                  onDrop={(e) => handleDrop(e, null)}
+                  className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${dragOverId === "__ROOT__" ? "bg-blue-500/10" : "hover:bg-neutral-800/60"}`}
+                >
+                  <FolderIcon size={20} className="text-neutral-400 shrink-0" />
+                  <span className="flex-1 min-w-0 text-sm text-white truncate">Sans dossier</span>
+                  <span className="text-xs text-neutral-500 shrink-0">{unfiledCount} doc{unfiledCount > 1 ? "s" : ""}</span>
+                </Link>
+              )}
+              {currentSubfolders.map((f) => {
+                const children = items.filter((i: any) => (i.parent_id ?? null) === f.id);
+                const nFolders = children.filter((i: any) => i.type === "folder").length;
+                const nDocs = children.length - nFolders;
+                const countLabel = children.length === 0
+                  ? "vide"
+                  : [
+                      nFolders > 0 ? `${nFolders} dossier${nFolders > 1 ? "s" : ""}` : null,
+                      nDocs > 0 ? `${nDocs} doc${nDocs > 1 ? "s" : ""}` : null,
+                    ].filter(Boolean).join(" · ");
+                const isOver = dragOverId === f.id;
+                return (
+                  <div
+                    key={f.id}
+                    className={`group flex items-center gap-3 px-3 py-2.5 transition-colors ${isOver ? "bg-blue-500/10" : "hover:bg-neutral-800/60"}`}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverId(f.id); }}
+                    onDragLeave={() => setDragOverId((v) => v === f.id ? null : v)}
+                    onDrop={(e) => handleDrop(e, f.id)}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("text/mydrive-item", f.id);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                  >
+                    <Link
+                      href={`/mydrive?folder=${f.id}`}
+                      scroll={false}
+                      onClick={() => playClick()}
+                      className="flex items-center gap-3 flex-1 min-w-0"
+                    >
+                      <FolderIcon size={20} className={`${folderColor(f.id)} shrink-0`} />
+                      <span className="min-w-0 text-sm text-white truncate">{f.title}</span>
+                      {f.is_mirror && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40 shrink-0">Miroir</span>
+                      )}
+                    </Link>
+                    <span className="hidden sm:inline text-xs text-neutral-500 shrink-0">{countLabel}</span>
+                    <ItemCodeBadge id={f.id} variant="inline" editable={false} />
+                    <div className="hidden group-hover:flex gap-1 shrink-0">
+                      <button
+                        onClick={(e) => { e.preventDefault(); setPicker({ mode: "mirror", item: f }); }}
+                        className="w-7 h-7 rounded bg-neutral-800/90 hover:bg-purple-600 text-neutral-300 hover:text-white flex items-center justify-center"
+                        title="Créer un miroir dans…"
+                      >
+                        <Link2 size={13} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.preventDefault(); handleRenameFolder(f); }}
+                        className="w-7 h-7 rounded bg-neutral-800/90 hover:bg-neutral-700 text-neutral-300 hover:text-white flex items-center justify-center"
+                        title="Renommer"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.preventDefault(); handleDeleteFolder(f); }}
+                        className="w-7 h-7 rounded bg-red-600/90 hover:bg-red-600 text-white flex items-center justify-center"
+                        title="Supprimer"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {folderId === null && trashedItems.length > 0 && (
+                <Link
+                  href={`/mydrive?folder=${TRASH}`}
+                  scroll={false}
+                  onClick={() => playClick()}
+                  className="flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-800/60 transition-colors"
+                >
+                  <Trash2 size={20} className="text-neutral-500 shrink-0" />
+                  <span className="flex-1 min-w-0 text-sm text-white truncate">Corbeille</span>
+                  <span className="text-xs text-neutral-500 shrink-0">{trashedItems.length} élément{trashedItems.length > 1 ? "s" : ""}</span>
+                </Link>
+              )}
+            </div>
+          ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {showUnfiledTile && (
             <Link
@@ -566,6 +693,8 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
               <span className="text-sm text-white">Corbeille</span>
               <span className="text-xs text-neutral-500 mt-0.5">{trashedItems.length} élément{trashedItems.length > 1 ? "s" : ""}</span>
             </Link>
+          )}
+        </div>
           )}
         </div>
       )}
