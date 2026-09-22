@@ -322,6 +322,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
       case "voyage": return `/editvoyage/${item.id}`;
       case "draw": return `/editdraw/${item.id}`;
       case "fiche": return `/editfiche/${item.id}`;
+    case "data": return `/editdata/${item.id}`;
       default: return null;
     }
   };

@@ -45,6 +45,7 @@ function hrefFor(item: MyDriveItem): string {
     case "voyage": return `/editvoyage/${item.id}`;
     case "draw": return `/editdraw/${item.id}`;
     case "fiche": return `/editfiche/${item.id}`;
+    case "data": return `/editdata/${item.id}`;
     default: return `/mydrive?folder=${d.parent_id ?? UNFILED}`;
   }
 }
