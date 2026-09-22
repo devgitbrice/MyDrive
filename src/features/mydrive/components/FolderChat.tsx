@@ -9,7 +9,6 @@ import { createFolder } from "@/features/mydrive/lib/folders";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useVoiceDictation } from "@/hooks/useVoiceDictation";
-import { useTTS } from "@/hooks/useTTS";
 
 // Mêmes modèles que le chat de l'éditeur de documents (API OpenAI disponible)
 const MODELS = [
@@ -57,81 +56,132 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
   const widthRef = useRef(420);
   const draggingRef = useRef(false);
 
-  // ---- Voix : micro (dictée) et oreille (conversation live) ----
-  const { state: ttsState, speak, stopPlayback } = useTTS();
-  const [earMode, setEarMode] = useState(false);
-  const earRef = useRef(false);
-  const earBufferRef = useRef("");
-  const earSendingRef = useRef(false);
-  const earTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dictTargetRef = useRef<"input" | "ear">("input");
+  // ---- Micro : dictée vocale (remplit le champ) ----
   const inputBaseRef = useRef("");
-  const dictRef = useRef<{ toggle: () => void; stop: () => void } | null>(null);
-  const sendRef = useRef<(t?: string) => void>(() => {});
-
   const dictation = useVoiceDictation((text) => {
-    if (dictTargetRef.current === "ear") {
-      if (earSendingRef.current) return;
-      earBufferRef.current = text;
-      setInput(text);
-      if (earTimerRef.current) clearTimeout(earTimerRef.current);
-      // 2 s de silence → on envoie la phrase et on agit immédiatement.
-      earTimerRef.current = setTimeout(() => {
-        const t = earBufferRef.current.trim();
-        if (!t) return;
-        earSendingRef.current = true;
-        earBufferRef.current = "";
-        dictRef.current?.stop();
-        setInput("");
-        sendRef.current(t);
-      }, 2000);
-    } else {
-      setInput(inputBaseRef.current + text);
-    }
+    setInput(inputBaseRef.current + text);
   });
-  dictRef.current = dictation;
-
-  const startEarListening = () => {
-    dictTargetRef.current = "ear";
-    earSendingRef.current = false;
-    earBufferRef.current = "";
-    setInput("");
-    if (dictation.state === "idle" || dictation.state === "error") dictation.toggle();
-  };
-
-  const toggleEar = () => {
-    if (earRef.current) {
-      earRef.current = false;
-      setEarMode(false);
-      if (earTimerRef.current) clearTimeout(earTimerRef.current);
-      dictation.stop();
-      stopPlayback();
-      dictTargetRef.current = "input";
-      setInput("");
-    } else {
-      earRef.current = true;
-      setEarMode(true);
-      startEarListening();
-    }
-  };
-
   const toggleMic = () => {
-    if (earRef.current) return; // le mode oreille gère déjà le micro
+    if (earState !== "off") return; // l'oreille utilise déjà le micro
     if (dictation.state === "recording" || dictation.state === "connecting") {
       dictation.stop();
     } else {
-      dictTargetRef.current = "input";
       inputBaseRef.current = input ? input.replace(/\s+$/, "") + " " : "";
       dictation.toggle();
     }
   };
 
+  // ---- Oreille : conversation vocale temps réel (OpenAI Realtime, WebRTC) ----
+  // Speech-to-speech direct : tu parles, l'IA répond en audio et agit via outils.
+  const [earState, setEarState] = useState<"off" | "connecting" | "live">("off");
+  const rtcRef = useRef<{ pc: RTCPeerConnection; dc: RTCDataChannel; mic: MediaStream; audioEl: HTMLAudioElement } | null>(null);
+
+  const stopEar = () => {
+    const r = rtcRef.current;
+    rtcRef.current = null;
+    if (r) {
+      try { r.dc.close(); } catch {}
+      try { r.pc.close(); } catch {}
+      r.mic.getTracks().forEach((t) => t.stop());
+      r.audioEl.pause();
+      r.audioEl.srcObject = null;
+    }
+    setEarState("off");
+  };
+
+  async function applyRealtimeTool(name: string, argsJson: string): Promise<string> {
+    let args: any = {};
+    try { args = JSON.parse(argsJson || "{}"); } catch {}
+    const result = await applyAction({ type: name, ...args });
+    router.refresh();
+    return result;
+  }
+
+  const onRealtimeEvent = async (e: MessageEvent) => {
+    let ev: any;
+    try { ev = JSON.parse(e.data); } catch { return; }
+    // Transcriptions affichées dans le fil du chat
+    if (ev.type === "conversation.item.input_audio_transcription.completed" && ev.transcript) {
+      const t = String(ev.transcript).trim();
+      if (t) setMessages((prev) => [...prev, { role: "user", text: t }]);
+    }
+    if (ev.type === "response.output_audio_transcript.done" && ev.transcript) {
+      const t = String(ev.transcript).trim();
+      if (t) setMessages((prev) => [...prev, { role: "assistant", text: t }]);
+    }
+    // Appels d'outils : exécution immédiate puis retour du résultat au modèle
+    if (ev.type === "response.done") {
+      const items = ev.response?.output || [];
+      let acted = false;
+      for (const item of items) {
+        if (item?.type !== "function_call" || !item.call_id) continue;
+        acted = true;
+        const output = await applyRealtimeTool(String(item.name || ""), String(item.arguments || "{}"));
+        setMessages((prev) => [...prev, { role: "assistant", text: output }]);
+        const dc = rtcRef.current?.dc;
+        if (dc && dc.readyState === "open") {
+          dc.send(JSON.stringify({
+            type: "conversation.item.create",
+            item: { type: "function_call_output", call_id: item.call_id, output },
+          }));
+        }
+      }
+      if (acted) {
+        const dc = rtcRef.current?.dc;
+        if (dc && dc.readyState === "open") dc.send(JSON.stringify({ type: "response.create" }));
+      }
+    }
+  };
+
+  const startEar = async () => {
+    if (dictation.state !== "idle") dictation.stop();
+    setEarState("connecting");
+    try {
+      const tk = await authFetch("/api/realtime-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ docIds: docs.slice(0, 15).map((d) => d.id), folderTitle: title }),
+      });
+      const td = await tk.json().catch(() => ({}));
+      if (!tk.ok || !td.token) throw new Error(td?.error || "Jeton vocal indisponible");
+
+      const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const pc = new RTCPeerConnection();
+      const audioEl = new Audio();
+      audioEl.autoplay = true;
+      pc.ontrack = (ev) => { audioEl.srcObject = ev.streams[0]; };
+      mic.getTracks().forEach((t) => pc.addTrack(t, mic));
+      const dc = pc.createDataChannel("oai-events");
+      dc.onmessage = onRealtimeEvent;
+      pc.onconnectionstatechange = () => {
+        if (["failed", "disconnected", "closed"].includes(pc.connectionState) && rtcRef.current?.pc === pc) stopEar();
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const resp = await fetch("https://api.openai.com/v1/realtime/calls", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${td.token}`, "Content-Type": "application/sdp" },
+        body: offer.sdp,
+      });
+      if (!resp.ok) throw new Error(`Connexion vocale refusée (${resp.status})`);
+      await pc.setRemoteDescription({ type: "answer", sdp: await resp.text() });
+
+      rtcRef.current = { pc, dc, mic, audioEl };
+      setEarState("live");
+    } catch (e: any) {
+      stopEar();
+      setMessages((prev) => [...prev, { role: "assistant", text: "⚠️ Voix : " + (e?.message || "connexion impossible") }]);
+    }
+  };
+
+  const toggleEar = () => { earState === "off" ? startEar() : stopEar(); };
+
   // Fermeture / démontage : tout couper.
   useEffect(() => {
     return () => {
-      earRef.current = false;
-      if (earTimerRef.current) clearTimeout(earTimerRef.current);
-      dictRef.current?.stop();
+      dictation.stop();
+      stopEar();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -221,6 +271,57 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
     historyRef.current = [];
   }, [sourceKey]);
 
+  // Exécute une action (chat texte ou outil vocal) et renvoie la confirmation.
+  async function applyAction(a: any): Promise<string> {
+    const parentId = createInFolderId === undefined ? null : createInFolderId;
+    const docIdSet = new Set(docs.map((d) => d.id));
+    try {
+      if (a.type === "create_folder" && a.name) {
+        await createFolder(String(a.name).slice(0, 120), parentId);
+        return `📁 Dossier **« ${a.name} »** créé.`;
+      }
+      if (a.type === "create_task_doc" && a.title) {
+        const tasks = (Array.isArray(a.tasks) ? a.tasks : []).filter((t: any) => t?.title).slice(0, 100);
+        const { error } = await supabase.from("MyDrive").insert({
+          title: String(a.title).slice(0, 150),
+          content: JSON.stringify({ tasks: tasks.map((t: any, i: number) => ({ id: `t${Date.now().toString(36)}${i}`, title: String(t.title).slice(0, 300), deadline: /^\d{4}-\d{2}-\d{2}$/.test(String(t.deadline || "")) ? t.deadline : null, done: t.done === true })) }),
+          observation: "", image_path: "", image_url: "",
+          doc_type: "tasks", parent_id: parentId,
+        });
+        if (error) throw error;
+        return `✅ Document de tâches **« ${a.title} »** créé (${tasks.length} tâche${tasks.length > 1 ? "s" : ""}).`;
+      }
+      if (a.type === "update_tasks" && a.id && docIdSet.has(a.id)) {
+        const tasks = (Array.isArray(a.tasks) ? a.tasks : []).filter((t: any) => t?.title).slice(0, 100);
+        const { error } = await supabase.from("MyDrive").update({
+          content: JSON.stringify({ tasks: tasks.map((t: any, i: number) => ({ id: `t${Date.now().toString(36)}${i}`, title: String(t.title).slice(0, 300), deadline: /^\d{4}-\d{2}-\d{2}$/.test(String(t.deadline || "")) ? t.deadline : null, done: t.done === true })) }),
+        }).eq("id", a.id);
+        if (error) throw error;
+        return "✅ Tâches mises à jour.";
+      }
+      if (a.type === "create_table" && a.title && Array.isArray(a.cells)) {
+        const cells = a.cells.slice(0, 300).map((r: any) => (Array.isArray(r) ? r : [r]).slice(0, 40).map((c: any) => String(c ?? "").slice(0, 2000)));
+        const { error } = await supabase.from("MyDrive").insert({
+          title: String(a.title).slice(0, 150),
+          content: JSON.stringify(cells),
+          observation: "", image_path: "", image_url: "",
+          doc_type: "table", parent_id: parentId,
+        });
+        if (error) throw error;
+        return `📊 Tableau **« ${a.title} »** créé (${cells.length} ligne${cells.length > 1 ? "s" : ""}).`;
+      }
+      if (a.type === "update_table" && a.id && docIdSet.has(a.id) && Array.isArray(a.cells)) {
+        const cells = a.cells.slice(0, 300).map((r: any) => (Array.isArray(r) ? r : [r]).slice(0, 40).map((c: any) => String(c ?? "").slice(0, 2000)));
+        const { error } = await supabase.from("MyDrive").update({ content: JSON.stringify(cells) }).eq("id", a.id);
+        if (error) throw error;
+        return "📊 Tableau mis à jour.";
+      }
+      return "⚠️ Action inconnue ou document hors du dossier.";
+    } catch (err: any) {
+      return `⚠️ Action impossible : ${err?.message || "erreur"}`;
+    }
+  }
+
   async function send(textOverride?: string) {
     const q = (textOverride ?? input).trim();
     if (!q || loading) return;
@@ -246,65 +347,19 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
 
       // Actions renvoyées par l'IA, exécutées ici (création/modification).
       const actions: any[] = Array.isArray(data.actions) ? data.actions : [];
-      const parentId = createInFolderId === undefined ? null : createInFolderId;
-      const docIdSet = new Set(docs.map((d) => d.id));
       for (const a of actions) {
-        try {
-          if (a.type === "create_folder" && a.name) {
-            await createFolder(a.name, parentId);
-            reply += `\n\n📁 Dossier **« ${a.name} »** créé.`;
-          } else if (a.type === "create_task_doc" && a.title) {
-            const { error } = await supabase.from("MyDrive").insert({
-              title: a.title,
-              content: JSON.stringify({ tasks: (a.tasks || []).map((t: any, i: number) => ({ id: `t${Date.now().toString(36)}${i}`, title: t.title, deadline: t.deadline || null, done: t.done === true })) }),
-              observation: "", image_path: "", image_url: "",
-              doc_type: "tasks", parent_id: parentId,
-            });
-            if (error) throw error;
-            reply += `\n\n✅ Document de tâches **« ${a.title} »** créé (${(a.tasks || []).length} tâche${(a.tasks || []).length > 1 ? "s" : ""}).`;
-          } else if (a.type === "update_tasks" && a.id && docIdSet.has(a.id)) {
-            const { error } = await supabase.from("MyDrive").update({
-              content: JSON.stringify({ tasks: (a.tasks || []).map((t: any, i: number) => ({ id: `t${Date.now().toString(36)}${i}`, title: t.title, deadline: t.deadline || null, done: t.done === true })) }),
-            }).eq("id", a.id);
-            if (error) throw error;
-            reply += "\n\n✅ Tâches mises à jour.";
-          } else if (a.type === "create_table" && a.title && a.cells) {
-            const { error } = await supabase.from("MyDrive").insert({
-              title: a.title,
-              content: JSON.stringify(a.cells),
-              observation: "", image_path: "", image_url: "",
-              doc_type: "table", parent_id: parentId,
-            });
-            if (error) throw error;
-            reply += `\n\n📊 Tableau **« ${a.title} »** créé (${a.cells.length} ligne${a.cells.length > 1 ? "s" : ""}).`;
-          } else if (a.type === "update_table" && a.id && a.cells && docIdSet.has(a.id)) {
-            const { error } = await supabase.from("MyDrive").update({ content: JSON.stringify(a.cells) }).eq("id", a.id);
-            if (error) throw error;
-            reply += "\n\n📊 Tableau mis à jour.";
-          }
-        } catch (err: any) {
-          reply += `\n\n⚠️ Action impossible : ${err?.message || "erreur"}`;
-        }
+        reply += "\n\n" + (await applyAction(a));
       }
       if (actions.length > 0) router.refresh();
       setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
       const exchange: Msg[] = [{ role: "user", text: q }, { role: "assistant", text: reply }];
       historyRef.current = [...historyRef.current, ...exchange].slice(-20);
-      // Mode oreille : lire la réponse à voix haute puis se remettre à écouter.
-      if (earRef.current) {
-        const spoken = reply.replace(/[*_#`]/g, "").replace(/\n+/g, ". ").slice(0, 800);
-        speak(spoken).then(() => {
-          if (earRef.current) startEarListening();
-        });
-      }
     } catch (e: any) {
       setMessages((prev) => [...prev, { role: "assistant", text: "⚠️ " + (e?.message || "Erreur inconnue") }]);
-      if (earRef.current) startEarListening();
     } finally {
       setLoading(false);
     }
   }
-  sendRef.current = send;
 
   if (!open) return null;
 
@@ -386,9 +441,9 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
         <div className="p-3 border-t border-neutral-800 flex items-end gap-2">
           <button
             onClick={toggleMic}
-            disabled={earMode}
+            disabled={earState !== "off"}
             className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center border transition-colors disabled:opacity-40 ${
-              !earMode && (dictation.state === "recording" || dictation.state === "connecting")
+              earState === "off" && (dictation.state === "recording" || dictation.state === "connecting")
                 ? "bg-red-600 border-red-500 text-white animate-pulse"
                 : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-purple-500"
             }`}
@@ -400,8 +455,10 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
           <button
             onClick={toggleEar}
             className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center border transition-colors ${
-              earMode
+              earState === "live"
                 ? "bg-purple-600 border-purple-500 text-white animate-pulse"
+                : earState === "connecting"
+                ? "bg-amber-500 border-amber-400 text-black animate-pulse"
                 : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-purple-500"
             }`}
             title="Discussion live : parle, l'IA répond à voix haute et agit immédiatement"
@@ -417,8 +474,10 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
             }}
             rows={2}
             placeholder={
-              earMode
-                ? (loading ? "Je réfléchis…" : ttsState === "playing" ? "Je te réponds…" : "🎙️ Je t'écoute — parle, je fais.")
+              earState === "live"
+                ? "🎙️ Conversation vocale en cours — parle, je réponds et j'agis."
+                : earState === "connecting"
+                ? "Connexion vocale…"
                 : single ? "Ta question sur ce document…" : "Ta question sur ce dossier…"
             }
             className="flex-1 resize-none bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-purple-500"
