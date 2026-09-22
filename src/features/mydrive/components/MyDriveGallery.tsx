@@ -15,6 +15,7 @@ import ItemCodeBadge from "@/features/mydrive/components/ItemCodeBadge";
 import { useItemCodes } from "@/features/mydrive/components/ItemCodeProvider";
 import { codeFromId } from "@/features/mydrive/lib/itemCode";
 import { deleteMirror } from "@/features/mydrive/lib/mirror";
+import { DocAiPanel } from "@/features/mydrive/components/FolderChat";
 
 const DOC_TYPE_CONFIG: Record<string, { icon: React.ReactNode; bg: string; text: string; border: string; label: string }> = {
   doc: { label: "Doc", bg: "bg-blue-500/20", text: "text-blue-400", border: "border-blue-500/40",
@@ -125,6 +126,8 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
   const [selectedDocType, setSelectedDocType] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<MyDriveItem | null>(null);
+  // Chat IA scoped sur un seul document (icône robot au survol)
+  const [chatItem, setChatItem] = useState<MyDriveItem | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [previewHref, setPreviewHref] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string>("");
@@ -355,6 +358,15 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7l4 4-4 4M21 12H8" /></svg>
       </button>
     );
+    const aiButton = itemData.type !== "folder" ? (
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setChatItem(item); }}
+        className="shrink-0 w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-purple-600 text-neutral-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
+        title="Demander à l'IA sur ce document"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="10" rx="2"/><path strokeLinecap="round" d="M12 8V5m0 0h.01M9 13h.01M15 13h.01M9.5 16h5"/></svg>
+      </button>
+    ) : null;
     const downloadButton = (
       <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); downloadItemAsFile(item); }} className="shrink-0 w-6 h-6 flex items-center justify-center rounded bg-neutral-800 hover:bg-blue-600 text-neutral-400 hover:text-white transition-colors" title="Télécharger">
         {docType === "scan" || (!itemData.doc_type && validUrl) ? (
@@ -411,6 +423,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
           <div className="flex items-center justify-between gap-2">
             <ItemCodeBadge id={item.id} variant="inline" className="shrink-0" />
             <h3 className="font-medium text-neutral-200 truncate text-sm group-hover:text-blue-400 transition-colors flex-1 min-w-0">{item.title}</h3>
+            {aiButton}
             {downloadButton}
           </div>
           <div className="flex items-center gap-2 text-[10px] text-neutral-500 uppercase tracking-wide">
@@ -514,6 +527,11 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
                       </span>
                       {item.is_mirror && (
                         <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40" title="Miroir : l'original est rangé ailleurs">Miroir</span>
+                      )}
+                      {itemData.type !== "folder" && (
+                        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setChatItem(item); }} className="shrink-0 w-7 h-7 flex items-center justify-center rounded bg-neutral-800 hover:bg-purple-600 text-neutral-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all" title="Demander à l'IA sur ce document">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="10" rx="2"/><path strokeLinecap="round" d="M12 8V5m0 0h.01M9 13h.01M15 13h.01M9.5 16h5"/></svg>
+                        </button>
                       )}
                       <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); dispatchMirrorRequest(item.id); }} className="shrink-0 w-7 h-7 flex items-center justify-center rounded bg-neutral-800 hover:bg-purple-600 text-neutral-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all" title="Créer un miroir dans…">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5M10.172 13.828a4 4 0 005.656 0l3-3a4 4 0 10-5.656-5.656l-1.5 1.5" /></svg>
@@ -655,6 +673,16 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
             </div>
           </div>
         </div>
+      )}
+
+      {chatItem && (
+        <DocAiPanel
+          key={chatItem.id}
+          open
+          onClose={() => setChatItem(null)}
+          title={chatItem.title || "(sans titre)"}
+          docs={[chatItem]}
+        />
       )}
     </>
   );
