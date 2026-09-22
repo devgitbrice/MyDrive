@@ -25,7 +25,33 @@ interface FolderDoc {
 }
 
 function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return html
+    // Les images base64 (présentations, dessins) n'apportent rien au texte et pèsent des Mo.
+    .replace(/data:[a-zA-Z0-9/+.;=-]{100,}/g, "(image)")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Recharge les documents côté serveur : la liste MyDrive côté client est
+// volontairement chargée sans `content` (performance), on le récupère ici
+// avec le token de l'utilisateur (RLS respecté).
+async function fetchDocs(req: NextRequest, ids: string[]): Promise<FolderDoc[]> {
+  const token = (req.headers.get("x-supabase-auth") || "").replace(/^Bearer\s+/i, "").trim();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!token || !url || !anon || ids.length === 0) return [];
+  const filter = ids.map((i) => encodeURIComponent(i)).join(",");
+  const r = await fetch(
+    `${url}/rest/v1/MyDrive?id=in.(${filter})&select=id,title,doc_type,observation,content,image_url`,
+    { headers: { apikey: anon, Authorization: `Bearer ${token}` } }
+  );
+  if (!r.ok) {
+    console.error("folder-assistant fetchDocs:", r.status, await r.text());
+    return [];
+  }
+  const rows = await r.json();
+  return Array.isArray(rows) ? rows : [];
 }
 
 // Extrait le texte d'un fichier stocké (PDF, Word, PowerPoint, texte) depuis son URL.
@@ -80,7 +106,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireUser(req);
   if (!auth.ok) return auth.res;
   try {
-    const { question, history, model: reqModel, folderTitle, docs } = await req.json();
+    const { question, history, model: reqModel, folderTitle, docIds, docs } = await req.json();
     if (!question || typeof question !== "string") {
       return NextResponse.json({ error: "Question requise" }, { status: 400 });
     }
@@ -88,7 +114,12 @@ export async function POST(req: NextRequest) {
     if (!apiKey) return NextResponse.json({ error: "Clé API OpenAI manquante" }, { status: 500 });
 
     const model = ALLOWED_MODELS.has(reqModel) ? reqModel : DEFAULT_MODEL;
-    const list: FolderDoc[] = (Array.isArray(docs) ? docs : []).slice(0, MAX_DOCS);
+    // Chemin normal : ids → rechargés en base avec leur content complet.
+    // Fallback : liste de docs envoyée par un client pas encore à jour.
+    const ids: string[] = (Array.isArray(docIds) ? docIds : []).map(String).slice(0, MAX_DOCS);
+    const list: FolderDoc[] = ids.length > 0
+      ? await fetchDocs(req, ids)
+      : (Array.isArray(docs) ? docs : []).slice(0, MAX_DOCS);
 
     // Construit le contexte : contenu des documents du dossier
     let context = "";

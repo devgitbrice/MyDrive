@@ -66,14 +66,8 @@ export default function FolderChat({ folderTitle, docs }: Props) {
           history: historyRef.current.slice(-10),
           model,
           folderTitle,
-          docs: docs.slice(0, 15).map((d: any) => ({
-            id: d.id,
-            title: d.title,
-            doc_type: d.doc_type,
-            observation: d.observation,
-            content: d.content,
-            image_url: d.image_url,
-          })),
+          // Le serveur recharge les documents (avec leur contenu complet) à partir des ids.
+          docIds: docs.slice(0, 15).map((d) => d.id),
         }),
       });
       const data = await res.json().catch(() => ({}));
