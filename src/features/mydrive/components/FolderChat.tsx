@@ -5,6 +5,8 @@ import ReactMarkdown from "react-markdown";
 import { Sparkles, X, Send, Bot } from "lucide-react";
 import type { MyDriveItem } from "@/features/mydrive/types";
 import { authFetch } from "@/lib/authFetch";
+import { createFolder } from "@/features/mydrive/lib/folders";
+import { useRouter } from "next/navigation";
 
 // Mêmes modèles que le chat de l'éditeur de documents (API OpenAI disponible)
 const MODELS = [
@@ -30,13 +32,16 @@ interface PanelProps {
   title: string;
   /** Documents servant de source aux réponses (1 seul = chat de document). */
   docs: MyDriveItem[];
+  /** Dossier où l'IA peut créer des dossiers (null = racine ; undefined = actions désactivées). */
+  createInFolderId?: string | null;
 }
 
 /**
  * Panneau de chat IA à droite. Les réponses s'appuient uniquement sur les
  * documents fournis : tout un dossier, ou un document unique (icône robot).
  */
-export function DocAiPanel({ open, onClose, title, docs }: PanelProps) {
+export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: PanelProps) {
+  const router = useRouter();
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -155,7 +160,26 @@ export function DocAiPanel({ open, onClose, title, docs }: PanelProps) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `Erreur ${res.status}`);
-      const reply = String(data.reply || "");
+      let reply = String(data.reply || "");
+
+      // Actions renvoyées par l'IA : création de dossiers dans le dossier courant.
+      const actions: { type: string; name: string }[] = Array.isArray(data.actions) ? data.actions : [];
+      if (actions.length > 0) {
+        if (createInFolderId === undefined) {
+          reply += "\n\n⚠️ Création de dossier indisponible depuis ce chat.";
+        } else {
+          for (const a of actions) {
+            if (a.type !== "create_folder" || !a.name) continue;
+            try {
+              await createFolder(a.name, createInFolderId);
+              reply += `\n\n📁 Dossier **« ${a.name} »** créé.`;
+            } catch (err: any) {
+              reply += `\n\n⚠️ Impossible de créer « ${a.name} » : ${err?.message || "erreur"}`;
+            }
+          }
+          router.refresh();
+        }
+      }
       setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
       const exchange: Msg[] = [{ role: "user", text: q }, { role: "assistant", text: reply }];
       historyRef.current = [...historyRef.current, ...exchange].slice(-20);
@@ -271,10 +295,12 @@ export function DocAiPanel({ open, onClose, title, docs }: PanelProps) {
 interface Props {
   folderTitle: string;
   docs: MyDriveItem[];
+  /** Dossier courant (null = racine/sans dossier) où l'IA peut créer des dossiers. */
+  folderId?: string | null;
 }
 
 /** Bouton « Demander à l'IA » d'un dossier + panneau de chat. */
-export default function FolderChat({ folderTitle, docs }: Props) {
+export default function FolderChat({ folderTitle, docs, folderId }: Props) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -284,7 +310,7 @@ export default function FolderChat({ folderTitle, docs }: Props) {
       >
         <Sparkles size={16} /> Demander à l&apos;IA
       </button>
-      <DocAiPanel open={open} onClose={() => setOpen(false)} title={folderTitle} docs={docs} />
+      <DocAiPanel open={open} onClose={() => setOpen(false)} title={folderTitle} docs={docs} createInFolderId={folderId} />
     </>
   );
 }

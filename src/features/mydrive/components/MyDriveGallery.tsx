@@ -682,6 +682,7 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
           onClose={() => setChatItem(null)}
           title={chatItem.title || "(sans titre)"}
           docs={[chatItem]}
+          createInFolderId={(chatItem as any).parent_id ?? null}
         />
       )}
     </>

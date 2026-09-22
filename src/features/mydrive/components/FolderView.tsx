@@ -472,6 +472,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
             <FolderChat
               folderTitle={folderId === UNFILED ? "Sans dossier" : (breadcrumb[breadcrumb.length - 1]?.title || "Dossier")}
               docs={currentNormalDocs}
+              folderId={folderId === UNFILED ? null : folderId}
             />
           )}
           {folderId !== UNFILED && (creating ? (
@@ -841,6 +842,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
           onClose={() => setChatFolder(null)}
           title={chatFolder.title || "Dossier"}
           docs={docsInFolder(chatFolder.id)}
+          createInFolderId={chatFolder.id}
         />
       )}
 

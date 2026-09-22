@@ -158,6 +158,10 @@ export async function POST(req: NextRequest) {
           "On te fournit le contenu des documents du dossier ouvert : tes réponses doivent s'appuyer UNIQUEMENT sur ces documents. " +
           "Cite le titre du ou des documents sur lesquels tu t'appuies (ex. « D'après “Avis d'appel octobre 2026”… »). " +
           "Si l'information demandée ne figure dans aucun document du dossier, dis-le clairement au lieu d'inventer. " +
+          "ACTIONS : tu peux créer des dossiers dans le dossier ouvert quand l'utilisateur le demande explicitement. " +
+          "Pour chaque dossier à créer, termine ta réponse par une balise exactement de la forme " +
+          '<action>{"type":"create_folder","name":"Nom du dossier"}</action> (une balise par dossier). ' +
+          "N'utilise JAMAIS cette balise sans demande explicite de création. " +
           "Réponds en français, de façon concise et factuelle (dates, montants, noms exacts).",
       },
       ...((history || []) as { role: string; text: string }[]).slice(-10).map((m) => ({
@@ -187,10 +191,23 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await res.json();
-    const reply: string = data.choices?.[0]?.message?.content || "";
-    if (!reply) return NextResponse.json({ error: "Réponse vide de l'IA." }, { status: 502 });
+    const raw: string = data.choices?.[0]?.message?.content || "";
+    if (!raw) return NextResponse.json({ error: "Réponse vide de l'IA." }, { status: 502 });
 
-    return NextResponse.json({ reply, model });
+    // Actions demandées par l'IA (création de dossiers), exécutées côté client.
+    const actions: { type: string; name: string }[] = [];
+    for (const m of raw.matchAll(/<action>([\s\S]*?)<\/action>/g)) {
+      try {
+        const a = JSON.parse(m[1]);
+        if (a?.type === "create_folder" && typeof a.name === "string" && a.name.trim()) {
+          actions.push({ type: "create_folder", name: a.name.trim().slice(0, 120) });
+        }
+      } catch {}
+    }
+    const reply = raw.replace(/<action>[\s\S]*?<\/action>/g, "").trim() ||
+      (actions.length ? "C'est fait." : raw);
+
+    return NextResponse.json({ reply, actions: actions.slice(0, 5), model });
   } catch (e) {
     console.error("folder-assistant error:", e);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
