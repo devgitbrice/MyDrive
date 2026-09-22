@@ -16,6 +16,7 @@ import { useItemCodes } from "./ItemCodeProvider";
 import { codeFromId } from "@/features/mydrive/lib/itemCode";
 import { playClick } from "@/lib/clickSound";
 import UpcomingPayments from "./UpcomingPayments";
+import FolderChat from "./FolderChat";
 
 const UNFILED = "__unfiled__";
 const TRASH = "__trash__";
@@ -432,9 +433,16 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
         </div>
       )}
 
-      {folderId !== UNFILED && folderId !== TRASH && (
+      {folderId !== TRASH && (
         <div className="flex items-center gap-2 flex-wrap">
-          {creating ? (
+          {/* Assistant IA du dossier : disponible dans chaque dossier contenant des documents */}
+          {folderId !== null && currentNormalDocs.length > 0 && (
+            <FolderChat
+              folderTitle={folderId === UNFILED ? "Sans dossier" : (breadcrumb[breadcrumb.length - 1]?.title || "Dossier")}
+              docs={currentNormalDocs}
+            />
+          )}
+          {folderId !== UNFILED && (creating ? (
             <>
               <input
                 autoFocus
@@ -457,7 +465,7 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
             >
               <FolderPlus size={16} /> Nouveau dossier
             </button>
-          )}
+          ))}
         </div>
       )}
 
