@@ -11,6 +11,7 @@ import { updateDriveItemAction, deleteDriveItemAction } from "@/features/mydrive
 import { parseSlides } from "@/presentation/types";
 import { downloadItemAsFile } from "@/features/mydrive/lib/downloadItem";
 import { supabase } from "@/lib/supabaseClient";
+import { onDriveChange } from "@/lib/driveEvents";
 import ItemCodeBadge from "@/features/mydrive/components/ItemCodeBadge";
 import { useItemCodes } from "@/features/mydrive/components/ItemCodeProvider";
 import { codeFromId } from "@/features/mydrive/lib/itemCode";
@@ -191,7 +192,11 @@ export default function MyDriveGallery({ items: initialItems, allTags: initialTa
         () => setPreviewKey((k) => k + 1)
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // Le bot IA a modifié le document affiché : on le recharge aussitôt.
+    const offDriveChange = onDriveChange(({ ids }) => {
+      if (ids.includes(previewedId)) setPreviewKey((k) => k + 1);
+    });
+    return () => { supabase.removeChannel(channel); offDriveChange(); };
   }, [previewHref]);
 
   const itemCodes = useItemCodes();

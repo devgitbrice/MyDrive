@@ -9,6 +9,7 @@ import { createFolder } from "@/features/mydrive/lib/folders";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useVoiceDictation } from "@/hooks/useVoiceDictation";
+import { emitDriveChange } from "@/lib/driveEvents";
 
 // Mêmes modèles que le chat de l'éditeur de documents (API OpenAI disponible)
 const MODELS = [
@@ -92,9 +93,7 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
   async function applyRealtimeTool(name: string, argsJson: string): Promise<string> {
     let args: any = {};
     try { args = JSON.parse(argsJson || "{}"); } catch {}
-    const result = await applyAction({ type: name, ...args });
-    router.refresh();
-    return result;
+    return applyAction({ type: name, ...args });
   }
 
   const onRealtimeEvent = async (e: MessageEvent) => {
@@ -272,23 +271,36 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
   }, [sourceKey]);
 
   // Exécute une action (chat texte ou outil vocal) et renvoie la confirmation.
+  // Les vues ouvertes (liste, aperçu) sont prévenues aussitôt pour s'afficher à jour.
   async function applyAction(a: any): Promise<string> {
+    const changed: string[] = [];
+    const result = await runAction(a, changed);
+    if (changed.length > 0) {
+      emitDriveChange(changed);
+      router.refresh();
+    }
+    return result;
+  }
+
+  async function runAction(a: any, changed: string[]): Promise<string> {
     const parentId = createInFolderId === undefined ? null : createInFolderId;
     const docIdSet = new Set(docs.map((d) => d.id));
     try {
       if (a.type === "create_folder" && a.name) {
-        await createFolder(String(a.name).slice(0, 120), parentId);
+        const f = await createFolder(String(a.name).slice(0, 120), parentId);
+        changed.push(f.id);
         return `📁 Dossier **« ${a.name} »** créé.`;
       }
       if (a.type === "create_task_doc" && a.title) {
         const tasks = (Array.isArray(a.tasks) ? a.tasks : []).filter((t: any) => t?.title).slice(0, 100);
-        const { error } = await supabase.from("MyDrive").insert({
+        const { data, error } = await supabase.from("MyDrive").insert({
           title: String(a.title).slice(0, 150),
           content: JSON.stringify({ tasks: tasks.map((t: any, i: number) => ({ id: `t${Date.now().toString(36)}${i}`, title: String(t.title).slice(0, 300), deadline: /^\d{4}-\d{2}-\d{2}$/.test(String(t.deadline || "")) ? t.deadline : null, done: t.done === true })) }),
           observation: "", image_path: "", image_url: "",
           doc_type: "tasks", parent_id: parentId,
-        });
+        }).select("id").single();
         if (error) throw error;
+        changed.push(data.id);
         return `✅ Document de tâches **« ${a.title} »** créé (${tasks.length} tâche${tasks.length > 1 ? "s" : ""}).`;
       }
       if (a.type === "update_tasks" && a.id && docIdSet.has(a.id)) {
@@ -297,23 +309,26 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
           content: JSON.stringify({ tasks: tasks.map((t: any, i: number) => ({ id: `t${Date.now().toString(36)}${i}`, title: String(t.title).slice(0, 300), deadline: /^\d{4}-\d{2}-\d{2}$/.test(String(t.deadline || "")) ? t.deadline : null, done: t.done === true })) }),
         }).eq("id", a.id);
         if (error) throw error;
+        changed.push(a.id);
         return "✅ Tâches mises à jour.";
       }
       if (a.type === "create_table" && a.title && Array.isArray(a.cells)) {
         const cells = a.cells.slice(0, 300).map((r: any) => (Array.isArray(r) ? r : [r]).slice(0, 40).map((c: any) => String(c ?? "").slice(0, 2000)));
-        const { error } = await supabase.from("MyDrive").insert({
+        const { data, error } = await supabase.from("MyDrive").insert({
           title: String(a.title).slice(0, 150),
           content: JSON.stringify(cells),
           observation: "", image_path: "", image_url: "",
           doc_type: "table", parent_id: parentId,
-        });
+        }).select("id").single();
         if (error) throw error;
+        changed.push(data.id);
         return `📊 Tableau **« ${a.title} »** créé (${cells.length} ligne${cells.length > 1 ? "s" : ""}).`;
       }
       if (a.type === "update_table" && a.id && docIdSet.has(a.id) && Array.isArray(a.cells)) {
         const cells = a.cells.slice(0, 300).map((r: any) => (Array.isArray(r) ? r : [r]).slice(0, 40).map((c: any) => String(c ?? "").slice(0, 2000)));
         const { error } = await supabase.from("MyDrive").update({ content: JSON.stringify(cells) }).eq("id", a.id);
         if (error) throw error;
+        changed.push(a.id);
         return "📊 Tableau mis à jour.";
       }
       return "⚠️ Action inconnue ou document hors du dossier.";
@@ -350,7 +365,6 @@ export function DocAiPanel({ open, onClose, title, docs, createInFolderId }: Pan
       for (const a of actions) {
         reply += "\n\n" + (await applyAction(a));
       }
-      if (actions.length > 0) router.refresh();
       setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
       const exchange: Msg[] = [{ role: "user", text: q }, { role: "assistant", text: reply }];
       historyRef.current = [...historyRef.current, ...exchange].slice(-20);

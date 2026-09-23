@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import type { MyDriveItem, Tag } from "@/features/mydrive/types";
 import { fetchMyDrive, fetchAllTags } from "@/features/mydrive/lib/fetchMyDrive";
 import { supabase } from "@/lib/supabaseClient";
+import { onDriveChange } from "@/lib/driveEvents";
 import { ItemCodeProvider } from "./ItemCodeProvider";
 import FolderView from "./FolderView";
 
@@ -67,8 +68,13 @@ export default function LiveDrive({
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
 
+    // Modifications faites depuis l'app (bot IA…) : rechargement immédiat,
+    // sans attendre le Realtime (qui peut être absent ou en retard).
+    const offDriveChange = onDriveChange(() => reload());
+
     return () => {
       if (debounce) clearTimeout(debounce);
+      offDriveChange();
       supabase.removeChannel(channel);
       clearInterval(poll);
       document.removeEventListener("visibilitychange", onVisible);

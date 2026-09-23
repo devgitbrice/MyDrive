@@ -90,26 +90,9 @@ export default function FolderView({ items: rawItems, allTags }: Props) {
     | null
   >(null);
 
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleRefresh = () => {
-    if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    refreshTimer.current = setTimeout(() => router.refresh(), 400);
-  };
 
-  useEffect(() => {
-    const channel = supabase
-      .channel("mydrive-live")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "MyDrive" },
-        () => scheduleRefresh()
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Le temps réel (Realtime + actions du bot) est géré par LiveDrive, parent
+  // de cette vue : pas de second canal « mydrive-live » ici (même nom → conflit).
 
   // Purge automatique de la corbeille : suppression définitive après 30 jours (#10)
   useEffect(() => {
