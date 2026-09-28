@@ -85,6 +85,23 @@ async function getContext(): Promise<BunqContext> {
   return ctx;
 }
 
+// Solde total des comptes, sans charger les paiements.
+export async function fetchBunqBalance(): Promise<number> {
+  let c = await getContext();
+  let res;
+  try {
+    res = await call(`/user/${c.userId}/monetary-account?count=25`, { auth: c.sessionToken });
+  } catch (e) {
+    if (!String(e).includes("Insufficient authorisation") && !String(e).includes("401")) throw e;
+    ctx = null;
+    c = await getContext();
+    res = await call(`/user/${c.userId}/monetary-account?count=25`, { auth: c.sessionToken });
+  }
+  return (res.Response as BunqObject[])
+    .map((entry) => Object.values(entry)[0] as { balance?: { value?: string } } | undefined)
+    .reduce((s, a) => s + (parseFloat(a?.balance?.value || "0") || 0), 0);
+}
+
 // Liste tous les paiements de tous les comptes (pagination older_id),
 // et remonte le solde total des comptes.
 export async function fetchBunqPayments(): Promise<{ payments: BunqPayment[]; balance: number }> {

@@ -89,6 +89,18 @@ interface QontoApiTx {
   income?: { counterparty_account_number?: string } | null;
 }
 
+// Solde des comptes Qonto (un seul appel, sans les transactions).
+export async function fetchQontoBalance(login: string, secret: string): Promise<{ balance: number; accounts: { name: string; balance: number }[] }> {
+  const res = await fetch("https://thirdparty.qonto.com/v2/organization", { headers: { Authorization: `${login}:${secret}` } });
+  if (!res.ok) throw new Error(`Qonto API organization → ${res.status}`);
+  const org = await res.json();
+  const accounts: { name?: string; balance?: number }[] = org.organization?.bank_accounts || [];
+  return {
+    balance: accounts.reduce((s, a) => s + (Number(a.balance) || 0), 0),
+    accounts: accounts.map((a) => ({ name: a.name || "Compte", balance: Number(a.balance) || 0 })),
+  };
+}
+
 // Lecture directe (temps réel) de l'API Qonto avec une clé
 // login:secret (Réglages Qonto → Intégrations → Clé API).
 export async function fetchQontoApiTxs(login: string, secret: string): Promise<{ txs: CompactTx[]; balance: number; accounts: { name: string; balance: number }[] }> {
