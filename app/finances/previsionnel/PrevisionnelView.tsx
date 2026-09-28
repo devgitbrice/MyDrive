@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, Copy, Check, ExternalLink, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 // Prévisionnel 2026 : lignes de la table Supabase mydrive_finance_previsionnel,
@@ -165,6 +165,153 @@ function DestHeader({ lignes }: { lignes: Ligne[] }) {
   );
 }
 
+// Bouton copier avec retour visuel (coche pendant 1,5 s).
+function CopyBtn({ value }: { value: string }) {
+  const [ok, setOk] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        if (!value) return;
+        try {
+          await navigator.clipboard.writeText(value);
+          setOk(true);
+          setTimeout(() => setOk(false), 1500);
+        } catch { /* clipboard indisponible */ }
+      }}
+      disabled={!value}
+      title="Copier"
+      className={`p-1.5 rounded-md border transition-colors ${ok
+        ? "border-emerald-500/50 text-emerald-400 bg-emerald-500/10"
+        : "border-neutral-700 text-neutral-400 hover:text-white bg-neutral-800 disabled:opacity-40"}`}
+    >
+      {ok ? <Check size={14} /> : <Copy size={14} />}
+    </button>
+  );
+}
+
+// Infos de paiement du destinataire (table mydrive_finance_destinataires) :
+// lien de paiement, IBAN, identifiant, mot de passe — complétables sur place,
+// sauvegardés en quittant le champ, avec bouton copier (et ouvrir pour le lien).
+interface DestInfos {
+  lien_paiement: string;
+  iban: string;
+  identifiant: string;
+  mot_de_passe: string;
+}
+const INFOS_VIDES: DestInfos = { lien_paiement: "", iban: "", identifiant: "", mot_de_passe: "" };
+
+function DestInfosPanel({ dest }: { dest: string }) {
+  const [infos, setInfos] = useState<DestInfos | null>(null);
+  const [showPwd, setShowPwd] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data } = await supabase
+        .from("mydrive_finance_destinataires")
+        .select("lien_paiement, iban, identifiant, mot_de_passe")
+        .eq("destinataire", dest)
+        .maybeSingle();
+      if (!alive) return;
+      setInfos({
+        lien_paiement: data?.lien_paiement || "",
+        iban: data?.iban || "",
+        identifiant: data?.identifiant || "",
+        mot_de_passe: data?.mot_de_passe || "",
+      });
+    })();
+    return () => { alive = false; };
+  }, [dest]);
+
+  const save = async (field: keyof DestInfos, value: string) => {
+    if (!infos) return;
+    setErr(null);
+    const { error } = await supabase
+      .from("mydrive_finance_destinataires")
+      .upsert({ destinataire: dest, [field]: value.trim() }, { onConflict: "destinataire" });
+    if (error) setErr("Impossible d'enregistrer les infos de paiement.");
+  };
+
+  const inputCls = "flex-1 min-w-0 rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-1.5 text-sm placeholder:text-neutral-600 focus:outline-none focus:border-sky-500";
+  const labelCls = "w-28 shrink-0 text-xs font-semibold text-neutral-400 uppercase tracking-wide";
+
+  if (!infos) return <section className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 text-sm text-neutral-500">Chargement des infos de paiement…</section>;
+
+  return (
+    <section className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 space-y-2.5">
+      <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Paiement — {dest}</p>
+      {err && <p className="text-red-400 text-sm">{err}</p>}
+
+      <div className="flex items-center gap-2">
+        <span className={labelCls}>Lien pour payer</span>
+        <input
+          value={infos.lien_paiement}
+          onChange={(e) => setInfos({ ...infos, lien_paiement: e.target.value })}
+          onBlur={(e) => save("lien_paiement", e.target.value)}
+          placeholder="https://…"
+          className={inputCls}
+        />
+        <a
+          href={infos.lien_paiement.trim() || undefined}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Ouvrir dans un nouvel onglet"
+          aria-disabled={!infos.lien_paiement.trim()}
+          className={`p-1.5 rounded-md border border-neutral-700 bg-neutral-800 transition-colors ${infos.lien_paiement.trim() ? "text-sky-400 hover:text-sky-300" : "text-neutral-600 pointer-events-none"}`}
+        >
+          <ExternalLink size={14} />
+        </a>
+        <CopyBtn value={infos.lien_paiement.trim()} />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className={labelCls}>IBAN si paiement</span>
+        <input
+          value={infos.iban}
+          onChange={(e) => setInfos({ ...infos, iban: e.target.value })}
+          onBlur={(e) => save("iban", e.target.value)}
+          placeholder="FR76 …"
+          className={`${inputCls} tabular-nums`}
+        />
+        <CopyBtn value={infos.iban.trim()} />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className={labelCls}>ID</span>
+        <input
+          value={infos.identifiant}
+          onChange={(e) => setInfos({ ...infos, identifiant: e.target.value })}
+          onBlur={(e) => save("identifiant", e.target.value)}
+          placeholder="Identifiant de connexion"
+          className={inputCls}
+        />
+        <CopyBtn value={infos.identifiant.trim()} />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className={labelCls}>PWD</span>
+        <input
+          type={showPwd ? "text" : "password"}
+          value={infos.mot_de_passe}
+          onChange={(e) => setInfos({ ...infos, mot_de_passe: e.target.value })}
+          onBlur={(e) => save("mot_de_passe", e.target.value)}
+          placeholder="Mot de passe"
+          className={inputCls}
+        />
+        <button
+          onClick={() => setShowPwd((v) => !v)}
+          title={showPwd ? "Masquer" : "Afficher"}
+          className="p-1.5 rounded-md border border-neutral-700 bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
+        >
+          {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
+        </button>
+        <CopyBtn value={infos.mot_de_passe} />
+      </div>
+    </section>
+  );
+}
+
 export default function PrevisionnelView({ dest }: { dest?: string }) {
   const [lignes, setLignes] = useState<Ligne[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -264,6 +411,8 @@ export default function PrevisionnelView({ dest }: { dest?: string }) {
     <div className="space-y-5">
       {/* Vue destinataire : stats annuelles + graphique au-dessus du tableau. */}
       {dest && <DestHeader lignes={lignes} />}
+      {/* Infos de paiement du destinataire, au-dessus des filtres. */}
+      {dest && <DestInfosPanel dest={dest} />}
 
     <div className="flex flex-col md:flex-row gap-5 items-start">
       {/* ---- Panneau de filtres (gauche) ---- */}
