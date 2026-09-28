@@ -320,6 +320,7 @@ export default function PrevisionnelView({ dest }: { dest?: string }) {
   const [mois, setMois] = useState<Set<number>>(new Set());
   const [statuts, setStatuts] = useState<Set<string>>(new Set());
   const [nature, setNature] = useState<"toutes" | "pro" | "perso">("toutes");
+  const [dests, setDests] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -351,10 +352,22 @@ export default function PrevisionnelView({ dest }: { dest?: string }) {
       }
       if (statuts.size > 0 && !statuts.has(l.statut || "")) return false;
       if (nature !== "toutes" && l.nature !== nature) return false;
+      if (dests.size > 0 && !dests.has(l.destinataire || "")) return false;
       if (needle && !`${l.titre} ${l.destinataire || ""}`.toLowerCase().includes(needle)) return false;
       return true;
     });
-  }, [lignes, mois, statuts, nature, q]);
+  }, [lignes, mois, statuts, nature, dests, q]);
+
+  // Destinataires distincts présents dans les données (pour le filtre).
+  const tousDests = useMemo(() => {
+    const set = new Set<string>();
+    let sans = false;
+    for (const l of lignes || []) {
+      if (l.destinataire) set.add(l.destinataire); else sans = true;
+    }
+    const list = [...set].sort((a, b) => a.localeCompare(b, "fr"));
+    return { list, sans };
+  }, [lignes]);
 
   const total = filtrees.reduce((s, l) => s + l.montant, 0);
   const totalRetard = filtrees.filter((l) => l.statut === "retard").reduce((s, l) => s + l.montant, 0);
@@ -483,6 +496,52 @@ export default function PrevisionnelView({ dest }: { dest?: string }) {
             ))}
           </div>
         </div>
+
+        {!dest && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Destinataire</label>
+            {dests.size > 0 && (
+              <button onClick={() => setDests(new Set())} className="text-[11px] text-sky-400 hover:text-sky-300">
+                Tout effacer
+              </button>
+            )}
+          </div>
+          {/* Liste verticale à cocher des destinataires présents dans les données. */}
+          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+            {tousDests.list.map((d) => (
+              <label key={d} className="flex items-center gap-2 text-sm text-neutral-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={dests.has(d)}
+                  onChange={() => setDests((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(d)) next.delete(d); else next.add(d);
+                    return next;
+                  })}
+                  className="accent-sky-500 shrink-0"
+                />
+                <span className="truncate" title={d}>{d}</span>
+              </label>
+            ))}
+            {tousDests.sans && (
+              <label className="flex items-center gap-2 text-sm text-neutral-500 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={dests.has("")}
+                  onChange={() => setDests((prev) => {
+                    const next = new Set(prev);
+                    if (next.has("")) next.delete(""); else next.add("");
+                    return next;
+                  })}
+                  className="accent-sky-500 shrink-0"
+                />
+                (sans destinataire)
+              </label>
+            )}
+          </div>
+        </div>
+        )}
 
         {!dest && (
         <div>
