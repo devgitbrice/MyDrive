@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import FinancesView from "./FinancesView";
 import FormationView from "./FormationView";
 import QontoView, { type QTx } from "./QontoView";
@@ -164,6 +165,10 @@ export default function FinancesTabs() {
           className={`px-4 py-2 text-sm font-semibold transition-colors ${tab === "formation" ? "bg-neutral-700 text-white" : "bg-neutral-900 text-neutral-400 hover:text-white"}`}>
           Formation
         </button>
+        <Link href="/finances/previsionnel"
+          className="px-4 py-2 text-sm font-semibold transition-colors bg-neutral-900 text-sky-400 hover:text-sky-300">
+          Prévisionnel
+        </Link>
       </div>
       {tab === "suivi" ? (
         <FinancesView
