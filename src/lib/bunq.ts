@@ -102,6 +102,44 @@ export async function fetchBunqBalance(): Promise<number> {
     .reduce((s, a) => s + (parseFloat(a?.balance?.value || "0") || 0), 0);
 }
 
+export interface BunqAccount {
+  id: number;
+  name: string;
+  type: string;
+  status: string;
+  balance: number;
+  currency: string;
+}
+
+// Détail de chaque compte / sous-compte (nom, type, solde).
+export async function fetchBunqAccounts(): Promise<BunqAccount[]> {
+  let c = await getContext();
+  let res;
+  try {
+    res = await call(`/user/${c.userId}/monetary-account?count=25`, { auth: c.sessionToken });
+  } catch (e) {
+    if (!String(e).includes("Insufficient authorisation") && !String(e).includes("401")) throw e;
+    ctx = null;
+    c = await getContext();
+    res = await call(`/user/${c.userId}/monetary-account?count=25`, { auth: c.sessionToken });
+  }
+  return (res.Response as BunqObject[])
+    .map((entry) => {
+      const [type, a] = Object.entries(entry)[0] || [];
+      if (!a || !a.id) return null;
+      const acc = a as { id: number; description?: string; status?: string; balance?: { value?: string; currency?: string } };
+      return {
+        id: acc.id,
+        name: (acc.description || "").trim() || `Compte ${acc.id}`,
+        type: String(type || "").replace("MonetaryAccount", ""),
+        status: acc.status || "",
+        balance: parseFloat(acc.balance?.value || "0") || 0,
+        currency: acc.balance?.currency || "EUR",
+      };
+    })
+    .filter((a): a is BunqAccount => a !== null);
+}
+
 // Liste tous les paiements de tous les comptes (pagination older_id),
 // et remonte le solde total des comptes.
 export async function fetchBunqPayments(): Promise<{ payments: BunqPayment[]; balance: number }> {
