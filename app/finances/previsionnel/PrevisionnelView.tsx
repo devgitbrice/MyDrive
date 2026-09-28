@@ -30,12 +30,22 @@ const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n || 0);
 const fdate = (d: string | null) => (d ? new Date(d + "T00:00:00").toLocaleDateString("fr-FR") : "—");
 
-function StatutBadge({ statut }: { statut: string | null }) {
+// Statut modifiable directement dans le tableau : le badge est un <select>
+// stylé comme un badge, la sauvegarde part vers Supabase à chaque changement.
+function StatutSelect({ statut, onChange, saving }: { statut: string | null; onChange: (s: string) => void; saving: boolean }) {
   const s = STATUTS.find((x) => x.key === statut);
   return (
-    <span className={`inline-block px-2 py-0.5 rounded-full border text-[11px] font-medium whitespace-nowrap ${s ? s.badge : "bg-neutral-500/15 text-neutral-400 border-neutral-500/30"}`}>
-      {s ? s.label : statut || "—"}
-    </span>
+    <select
+      value={s ? s.key : ""}
+      disabled={saving}
+      onChange={(e) => e.target.value && onChange(e.target.value)}
+      className={`appearance-none cursor-pointer px-2 py-0.5 rounded-full border text-[11px] font-medium whitespace-nowrap focus:outline-none focus:ring-1 focus:ring-sky-500 ${saving ? "opacity-50" : ""} ${s ? s.badge : "bg-neutral-500/15 text-neutral-400 border-neutral-500/30"}`}
+    >
+      {!s && <option value="">—</option>}
+      {STATUTS.map((x) => (
+        <option key={x.key} value={x.key} className="bg-neutral-900 text-neutral-100">{x.label}</option>
+      ))}
+    </select>
   );
 }
 
@@ -48,6 +58,8 @@ export default function PrevisionnelView() {
   const [statuts, setStatuts] = useState<Set<string>>(new Set());
   const [nature, setNature] = useState<"toutes" | "pro" | "perso">("toutes");
   const [q, setQ] = useState("");
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -81,6 +93,26 @@ export default function PrevisionnelView() {
 
   const total = filtrees.reduce((s, l) => s + l.montant, 0);
   const totalRetard = filtrees.filter((l) => l.statut === "retard").reduce((s, l) => s + l.montant, 0);
+
+  // Changement manuel du statut d'une ligne : mise à jour optimiste puis
+  // sauvegarde Supabase. Passer en « payé » renseigne la date de paiement
+  // (aujourd'hui) si elle est vide ; en sortir la remet à vide.
+  const changeStatut = async (l: Ligne, statut: string) => {
+    const date_paiement = statut === "paye" ? (l.date_paiement || new Date().toISOString().slice(0, 10)) : null;
+    const prev = lignes;
+    setSaveError(null);
+    setSavingId(l.id);
+    setLignes((cur) => (cur || []).map((x) => (x.id === l.id ? { ...x, statut, date_paiement } : x)));
+    const { error } = await supabase
+      .from("mydrive_finance_previsionnel")
+      .update({ statut, date_paiement })
+      .eq("id", l.id);
+    setSavingId(null);
+    if (error) {
+      setLignes(prev);
+      setSaveError("Impossible d'enregistrer le statut (droits ou connexion).");
+    }
+  };
 
   const toggleStatut = (key: string) => {
     setStatuts((prev) => {
@@ -162,7 +194,9 @@ export default function PrevisionnelView() {
       </aside>
 
       {/* ---- Tableau (droite) ---- */}
-      <div className="flex-1 w-full overflow-x-auto rounded-xl border border-neutral-800">
+      <div className="flex-1 w-full space-y-2">
+        {saveError && <p className="text-red-400 text-sm">{saveError}</p>}
+        <div className="overflow-x-auto rounded-xl border border-neutral-800">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-neutral-900 text-neutral-400 text-left">
@@ -189,11 +223,12 @@ export default function PrevisionnelView() {
                 <td className="px-3 py-2 text-right tabular-nums text-neutral-100">{eur(l.montant)}</td>
                 <td className="px-3 py-2 text-neutral-300 whitespace-nowrap">{fdate(l.date_echeance)}</td>
                 <td className="px-3 py-2 text-neutral-400 whitespace-nowrap">{fdate(l.date_paiement)}</td>
-                <td className="px-3 py-2"><StatutBadge statut={l.statut} /></td>
+                <td className="px-3 py-2"><StatutSelect statut={l.statut} saving={savingId === l.id} onChange={(s) => changeStatut(l, s)} /></td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
