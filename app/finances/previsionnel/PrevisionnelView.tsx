@@ -54,7 +54,7 @@ export default function PrevisionnelView() {
   const [error, setError] = useState<string | null>(null);
 
   // Filtres (panneau de gauche)
-  const [mois, setMois] = useState<number | "tous">("tous");
+  const [mois, setMois] = useState<Set<number>>(new Set());
   const [statuts, setStatuts] = useState<Set<string>>(new Set());
   const [nature, setNature] = useState<"toutes" | "pro" | "perso">("toutes");
   const [q, setQ] = useState("");
@@ -80,9 +80,9 @@ export default function PrevisionnelView() {
     if (!lignes) return [];
     const needle = q.trim().toLowerCase();
     return lignes.filter((l) => {
-      if (mois !== "tous") {
+      if (mois.size > 0) {
         if (!l.date_echeance) return false;
-        if (new Date(l.date_echeance + "T00:00:00").getMonth() !== mois) return false;
+        if (!mois.has(new Date(l.date_echeance + "T00:00:00").getMonth())) return false;
       }
       if (statuts.size > 0 && !statuts.has(l.statut || "")) return false;
       if (nature !== "toutes" && l.nature !== nature) return false;
@@ -143,15 +143,38 @@ export default function PrevisionnelView() {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-2">Mois</label>
-          <select
-            value={mois === "tous" ? "tous" : String(mois)}
-            onChange={(e) => setMois(e.target.value === "tous" ? "tous" : Number(e.target.value))}
-            className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-1.5 text-sm focus:outline-none focus:border-sky-500"
-          >
-            <option value="tous">Tous les mois</option>
-            {MOIS.map((m, i) => <option key={m} value={i}>{m} 2026</option>)}
-          </select>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Mois</label>
+            {mois.size > 0 && (
+              <button onClick={() => setMois(new Set())} className="text-[11px] text-sky-400 hover:text-sky-300">
+                Tout effacer
+              </button>
+            )}
+          </div>
+          {/* Sélection multiple : chaque mois est une pastille cliquable. */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {MOIS.map((m, i) => {
+              const on = mois.has(i);
+              return (
+                <button
+                  key={m}
+                  onClick={() => setMois((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(i)) next.delete(i); else next.add(i);
+                    return next;
+                  })}
+                  className={`px-1 py-1 rounded-md border text-[11px] font-medium transition-colors ${on
+                    ? "bg-sky-500/20 border-sky-500/50 text-sky-300"
+                    : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-white"}`}
+                >
+                  {m.slice(0, 4)}{m.length > 4 ? "." : ""}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-[11px] text-neutral-500">
+            {mois.size === 0 ? "Tous les mois 2026" : [...mois].sort((a, b) => a - b).map((i) => MOIS[i]).join(", ")}
+          </p>
         </div>
 
         <div>
