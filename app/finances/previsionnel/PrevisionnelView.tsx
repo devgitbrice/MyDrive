@@ -49,6 +49,46 @@ function StatutSelect({ statut, onChange, saving }: { statut: string | null; onC
   );
 }
 
+// Montant modifiable : le montant affiché devient un champ au clic,
+// validé avec Entrée ou en sortant du champ, annulé avec Échap.
+function MontantCell({ value, onCommit, saving }: { value: number; onCommit: (n: number) => void; saving: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const commit = () => {
+    setEditing(false);
+    const n = parseFloat(draft.replace(/\s/g, "").replace(",", "."));
+    if (!isNaN(n) && n !== value) onCommit(n);
+  };
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => { setDraft(String(value).replace(".", ",")); setEditing(true); }}
+        disabled={saving}
+        title="Cliquer pour modifier le montant"
+        className={`tabular-nums text-neutral-100 hover:text-sky-300 hover:underline decoration-dotted underline-offset-2 ${saving ? "opacity-50" : ""}`}
+      >
+        {eur(value)}
+      </button>
+    );
+  }
+  return (
+    <input
+      autoFocus
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+        if (e.key === "Escape") setEditing(false);
+      }}
+      inputMode="decimal"
+      className="w-24 text-right tabular-nums rounded-md bg-neutral-800 border border-sky-500 px-2 py-0.5 text-sm text-neutral-100 focus:outline-none"
+    />
+  );
+}
+
 export default function PrevisionnelView() {
   const [lignes, setLignes] = useState<Ligne[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +151,23 @@ export default function PrevisionnelView() {
     if (error) {
       setLignes(prev);
       setSaveError("Impossible d'enregistrer le statut (droits ou connexion).");
+    }
+  };
+
+  // Modification manuelle du montant, même mécanique optimiste que le statut.
+  const changeMontant = async (l: Ligne, montant: number) => {
+    const prev = lignes;
+    setSaveError(null);
+    setSavingId(l.id);
+    setLignes((cur) => (cur || []).map((x) => (x.id === l.id ? { ...x, montant } : x)));
+    const { error } = await supabase
+      .from("mydrive_finance_previsionnel")
+      .update({ montant })
+      .eq("id", l.id);
+    setSavingId(null);
+    if (error) {
+      setLignes(prev);
+      setSaveError("Impossible d'enregistrer le montant (droits ou connexion).");
     }
   };
 
@@ -219,17 +276,19 @@ export default function PrevisionnelView() {
       {/* ---- Tableau (droite) ---- */}
       <div className="flex-1 w-full space-y-2">
         {saveError && <p className="text-red-400 text-sm">{saveError}</p>}
-        <div className="overflow-x-auto rounded-xl border border-neutral-800">
+        {/* overflow-auto + max-h : le tableau scrolle dans son cadre et
+            l'en-tête (th sticky) reste visible en haut. */}
+        <div className="overflow-auto max-h-[calc(100dvh-9rem)] rounded-xl border border-neutral-800">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-neutral-900 text-neutral-400 text-left">
-              <th className="px-3 py-2 font-medium">Titre</th>
-              <th className="px-3 py-2 font-medium">Destinataire</th>
-              <th className="px-3 py-2 font-medium">Nature</th>
-              <th className="px-3 py-2 font-medium text-right">Montant</th>
-              <th className="px-3 py-2 font-medium">Échéance</th>
-              <th className="px-3 py-2 font-medium">Payé le</th>
-              <th className="px-3 py-2 font-medium">Statut</th>
+              <th className="sticky top-0 z-10 bg-neutral-900 px-3 py-2 font-medium">Titre</th>
+              <th className="sticky top-0 z-10 bg-neutral-900 px-3 py-2 font-medium">Destinataire</th>
+              <th className="sticky top-0 z-10 bg-neutral-900 px-3 py-2 font-medium">Nature</th>
+              <th className="sticky top-0 z-10 bg-neutral-900 px-3 py-2 font-medium text-right">Montant</th>
+              <th className="sticky top-0 z-10 bg-neutral-900 px-3 py-2 font-medium">Échéance</th>
+              <th className="sticky top-0 z-10 bg-neutral-900 px-3 py-2 font-medium">Payé le</th>
+              <th className="sticky top-0 z-10 bg-neutral-900 px-3 py-2 font-medium">Statut</th>
             </tr>
           </thead>
           <tbody>
@@ -243,7 +302,9 @@ export default function PrevisionnelView() {
                 <td className="px-3 py-2">
                   <span className={`text-[11px] font-medium uppercase ${l.nature === "pro" ? "text-sky-400" : "text-violet-400"}`}>{l.nature || "—"}</span>
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums text-neutral-100">{eur(l.montant)}</td>
+                <td className="px-3 py-2 text-right">
+                  <MontantCell value={l.montant} saving={savingId === l.id} onCommit={(n) => changeMontant(l, n)} />
+                </td>
                 <td className="px-3 py-2 text-neutral-300 whitespace-nowrap">{fdate(l.date_echeance)}</td>
                 <td className="px-3 py-2 text-neutral-400 whitespace-nowrap">{fdate(l.date_paiement)}</td>
                 <td className="px-3 py-2"><StatutSelect statut={l.statut} saving={savingId === l.id} onChange={(s) => changeStatut(l, s)} /></td>
