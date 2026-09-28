@@ -89,7 +89,83 @@ function MontantCell({ value, onCommit, saving }: { value: number; onCommit: (n:
   );
 }
 
-export default function PrevisionnelView() {
+// Couleurs des barres du graphique par statut (mêmes teintes que les badges).
+const CHART_COLORS: Record<string, { bg: string; label: string }> = {
+  paye: { bg: "bg-emerald-500", label: "Payé" },
+  retard: { bg: "bg-red-500", label: "En retard" },
+  a_payer: { bg: "bg-amber-500", label: "À payer" },
+  pas_encore_echu: { bg: "bg-neutral-500", label: "Pas encore échu" },
+};
+const CHART_ORDER = ["paye", "retard", "a_payer", "pas_encore_echu"];
+
+// Vue annuelle d'un destinataire : total, répartition par statut et
+// graphique à barres empilées mois par mois (vert payé / rouge retard /
+// gris pas encore échu, ambre pour l'éventuel « à payer »).
+function DestHeader({ lignes }: { lignes: Ligne[] }) {
+  const totalAnnuel = lignes.reduce((s, l) => s + l.montant, 0);
+  const parStatut = CHART_ORDER
+    .map((k) => ({
+      key: k,
+      ...CHART_COLORS[k],
+      total: lignes.filter((l) => l.statut === k).reduce((s, l) => s + l.montant, 0),
+      n: lignes.filter((l) => l.statut === k).length,
+    }))
+    .filter((s) => s.n > 0);
+
+  // Sommes par mois et par statut pour les barres empilées.
+  const parMois = MOIS.map((_, i) => {
+    const rows = lignes.filter((l) => l.date_echeance && new Date(l.date_echeance + "T00:00:00").getMonth() === i);
+    const seg: Record<string, number> = {};
+    for (const k of CHART_ORDER) seg[k] = rows.filter((l) => l.statut === k).reduce((s, l) => s + l.montant, 0);
+    return { seg, total: rows.reduce((s, l) => s + l.montant, 0) };
+  });
+  const maxMois = Math.max(1, ...parMois.map((m) => m.total));
+  const H = 140; // hauteur utile des barres en px
+
+  return (
+    <section className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 space-y-4">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div>
+          <p className="text-xs text-neutral-500 uppercase tracking-wide">Montant total annuel</p>
+          <p className="text-2xl font-semibold text-neutral-100 tabular-nums">{eur(totalAnnuel)}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {parStatut.map((s) => (
+            <span key={s.key} className="inline-flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-800/70 px-2.5 py-1 text-xs text-neutral-200">
+              <span className={`inline-block w-2.5 h-2.5 rounded-sm ${s.bg}`} />
+              {s.label} : <span className="font-semibold tabular-nums">{eur(s.total)}</span>
+              <span className="text-neutral-500">({s.n})</span>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Graphique : une barre par mois, segments empilés par statut. */}
+      <div className="overflow-x-auto">
+        <div className="flex items-end gap-2 min-w-[560px]" style={{ height: H + 34 }}>
+          {parMois.map((m, i) => (
+            <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1 h-full">
+              <span className="text-[10px] text-neutral-400 tabular-nums">{m.total > 0 ? eur(m.total) : ""}</span>
+              <div className="w-full max-w-[34px] flex flex-col-reverse rounded-t-[4px] overflow-hidden">
+                {CHART_ORDER.map((k) => m.seg[k] > 0 && (
+                  <div
+                    key={k}
+                    title={`${MOIS[i]} — ${CHART_COLORS[k].label} : ${eur(m.seg[k])}`}
+                    className={`${CHART_COLORS[k].bg} w-full border-t-2 border-neutral-950 first:border-t-0`}
+                    style={{ height: Math.max(3, Math.round((m.seg[k] / maxMois) * H)) }}
+                  />
+                ))}
+              </div>
+              <span className="text-[10px] text-neutral-500">{MOIS[i].slice(0, 3)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export default function PrevisionnelView({ dest }: { dest?: string }) {
   const [lignes, setLignes] = useState<Ligne[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,17 +180,19 @@ export default function PrevisionnelView() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("mydrive_finance_previsionnel")
         .select("id, titre, nature, destinataire, montant, date_echeance, date_paiement, statut")
         .order("date_echeance", { ascending: true })
         .order("montant", { ascending: false });
+      if (dest) query = query.eq("destinataire", dest);
+      const { data, error } = await query;
       if (!alive) return;
       if (error) { setError("Impossible de charger le prévisionnel."); return; }
       setLignes((data || []).map((r: any) => ({ ...r, montant: Number(r.montant) || 0 })));
     })();
     return () => { alive = false; };
-  }, []);
+  }, [dest]);
 
   const filtrees = useMemo(() => {
     if (!lignes) return [];
@@ -183,9 +261,14 @@ export default function PrevisionnelView() {
   if (!lignes) return <p className="text-neutral-500 text-sm">Chargement…</p>;
 
   return (
+    <div className="space-y-5">
+      {/* Vue destinataire : stats annuelles + graphique au-dessus du tableau. */}
+      {dest && <DestHeader lignes={lignes} />}
+
     <div className="flex flex-col md:flex-row gap-5 items-start">
       {/* ---- Panneau de filtres (gauche) ---- */}
       <aside className="w-full md:w-60 shrink-0 md:sticky md:top-4 space-y-5 rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
+        {!dest && (
         <div>
           <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-2">Recherche</label>
           <div className="relative">
@@ -198,6 +281,7 @@ export default function PrevisionnelView() {
             />
           </div>
         </div>
+        )}
 
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -251,6 +335,7 @@ export default function PrevisionnelView() {
           </div>
         </div>
 
+        {!dest && (
         <div>
           <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-2">Nature</label>
           <div className="inline-flex rounded-lg border border-neutral-700 overflow-hidden text-sm">
@@ -265,6 +350,7 @@ export default function PrevisionnelView() {
             ))}
           </div>
         </div>
+        )}
 
         <div className="border-t border-neutral-800 pt-3 space-y-1 text-sm">
           <p className="text-neutral-400">{filtrees.length} ligne{filtrees.length > 1 ? "s" : ""}</p>
@@ -298,7 +384,19 @@ export default function PrevisionnelView() {
             {filtrees.map((l) => (
               <tr key={l.id} className="border-t border-neutral-800/70 hover:bg-neutral-900/50">
                 <td className="px-3 py-2 text-neutral-100">{l.titre}</td>
-                <td className="px-3 py-2 text-neutral-400">{l.destinataire || "—"}</td>
+                <td className="px-3 py-2 text-neutral-400">
+                  {l.destinataire && !dest ? (
+                    // Ouvre la vue annuelle du destinataire dans un nouvel onglet.
+                    <a
+                      href={`/finances/previsionnel/d/${encodeURIComponent(l.destinataire)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sky-400 hover:text-sky-300 hover:underline underline-offset-2"
+                    >
+                      {l.destinataire}
+                    </a>
+                  ) : (l.destinataire || "—")}
+                </td>
                 <td className="px-3 py-2">
                   <span className={`text-[11px] font-medium uppercase ${l.nature === "pro" ? "text-sky-400" : "text-violet-400"}`}>{l.nature || "—"}</span>
                 </td>
@@ -314,6 +412,7 @@ export default function PrevisionnelView() {
         </table>
         </div>
       </div>
+    </div>
     </div>
   );
 }
