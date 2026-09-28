@@ -358,16 +358,29 @@ export default function PrevisionnelView({ dest }: { dest?: string }) {
     });
   }, [lignes, mois, statuts, nature, dests, q]);
 
-  // Destinataires distincts présents dans les données (pour le filtre).
+  // Destinataires distincts pour le filtre. La nature est rattachée au
+  // destinataire : choisir pro ou perso affine la liste aux destinataires
+  // qui ont des lignes de cette nature.
   const tousDests = useMemo(() => {
     const set = new Set<string>();
     let sans = false;
     for (const l of lignes || []) {
+      if (nature !== "toutes" && l.nature !== nature) continue;
       if (l.destinataire) set.add(l.destinataire); else sans = true;
     }
     const list = [...set].sort((a, b) => a.localeCompare(b, "fr"));
     return { list, sans };
-  }, [lignes]);
+  }, [lignes, nature]);
+
+  // Quand la nature change, on décoche les destinataires qui ne sont plus listés.
+  useEffect(() => {
+    setDests((prev) => {
+      if (prev.size === 0) return prev;
+      const visibles = new Set(tousDests.list);
+      const next = new Set([...prev].filter((d) => (d === "" ? tousDests.sans : visibles.has(d))));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [tousDests]);
 
   const total = filtrees.reduce((s, l) => s + l.montant, 0);
   const totalRetard = filtrees.filter((l) => l.statut === "retard").reduce((s, l) => s + l.montant, 0);
