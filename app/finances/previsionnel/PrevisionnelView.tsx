@@ -165,6 +165,88 @@ function DestHeader({ lignes }: { lignes: Ligne[] }) {
   );
 }
 
+// Courbe des 3 prochains mois : cumul des montants à payer (statuts
+// pas_encore_echu / a_payer) entre aujourd'hui et J+92, en deux séries
+// Pro (bleu) et Perso (violet). Courbe en escalier : chaque échéance
+// fait monter le cumul le jour J.
+function PrevisionsChart({ lignes }: { lignes: Ligne[] }) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const end = new Date(today); end.setDate(end.getDate() + 92);
+  const span = end.getTime() - today.getTime();
+
+  const serie = (nature: "pro" | "perso") => {
+    const rows = lignes
+      .filter((l) => l.nature === nature && (l.statut === "pas_encore_echu" || l.statut === "a_payer") && l.date_echeance)
+      .map((l) => ({ t: new Date(l.date_echeance + "T00:00:00").getTime(), m: l.montant }))
+      .filter((r) => r.t >= today.getTime() && r.t <= end.getTime())
+      .sort((a, b) => a.t - b.t);
+    let cum = 0;
+    const pts: { t: number; v: number }[] = [{ t: today.getTime(), v: 0 }];
+    for (const r of rows) { cum += r.m; pts.push({ t: r.t, v: cum }); }
+    pts.push({ t: end.getTime(), v: cum });
+    return pts;
+  };
+
+  const pro = serie("pro");
+  const perso = serie("perso");
+  const maxV = Math.max(1, pro[pro.length - 1].v, perso[perso.length - 1].v);
+
+  const W = 920, H = 210, PAD_L = 56, PAD_R = 90, PAD_T = 14, PAD_B = 26;
+  const x = (t: number) => PAD_L + ((t - today.getTime()) / span) * (W - PAD_L - PAD_R);
+  const y = (v: number) => H - PAD_B - (v / maxV) * (H - PAD_T - PAD_B);
+  // Tracé en escalier (step-after) : horizontal jusqu'à l'échéance, puis saut.
+  const path = (pts: { t: number; v: number }[]) =>
+    pts.map((p, i) => (i === 0 ? `M ${x(p.t)} ${y(p.v)}` : `L ${x(p.t)} ${y(pts[i - 1].v)} L ${x(p.t)} ${y(p.v)}`)).join(" ");
+
+  // Graduations : début de chaque mois dans la fenêtre + aujourd'hui.
+  const monthTicks: Date[] = [];
+  const d = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  while (d.getTime() <= end.getTime()) { monthTicks.push(new Date(d)); d.setMonth(d.getMonth() + 1); }
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(maxV * f));
+
+  return (
+    <section className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wide">À payer — cumul sur 3 mois</p>
+        <div className="flex gap-4 text-xs text-neutral-300">
+          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-0.5 bg-sky-400 inline-block" /> Pro {eur(pro[pro.length - 1].v)}</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-0.5 bg-violet-400 inline-block" /> Perso {eur(perso[perso.length - 1].v)}</span>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Cumul des paiements à venir sur 3 mois, séries pro et perso">
+        {yTicks.map((v) => (
+          <g key={v}>
+            <line x1={PAD_L} x2={W - PAD_R} y1={y(v)} y2={y(v)} stroke="#262626" strokeWidth="1" />
+            <text x={PAD_L - 6} y={y(v) + 3} textAnchor="end" fontSize="10" fill="#737373">{v >= 1000 ? `${Math.round(v / 100) / 10}k€` : `${v}€`}</text>
+          </g>
+        ))}
+        {monthTicks.map((m) => (
+          <g key={m.getTime()}>
+            <line x1={x(m.getTime())} x2={x(m.getTime())} y1={PAD_T} y2={H - PAD_B} stroke="#262626" strokeWidth="1" strokeDasharray="3 3" />
+            <text x={x(m.getTime())} y={H - 8} textAnchor="middle" fontSize="10" fill="#737373">{m.toLocaleDateString("fr-FR", { month: "short" })}</text>
+          </g>
+        ))}
+        <text x={PAD_L} y={H - 8} textAnchor="start" fontSize="10" fill="#737373">auj.</text>
+        <path d={path(perso)} fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinejoin="round" />
+        <path d={path(pro)} fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinejoin="round" />
+        {pro.slice(1, -1).map((p, i) => (
+          <circle key={`p${i}`} cx={x(p.t)} cy={y(p.v)} r="3" fill="#38bdf8" stroke="#0a0a0a" strokeWidth="1.5">
+            <title>{`Pro — ${new Date(p.t).toLocaleDateString("fr-FR")} : cumul ${eur(p.v)}`}</title>
+          </circle>
+        ))}
+        {perso.slice(1, -1).map((p, i) => (
+          <circle key={`s${i}`} cx={x(p.t)} cy={y(p.v)} r="3" fill="#a78bfa" stroke="#0a0a0a" strokeWidth="1.5">
+            <title>{`Perso — ${new Date(p.t).toLocaleDateString("fr-FR")} : cumul ${eur(p.v)}`}</title>
+          </circle>
+        ))}
+        <text x={W - PAD_R + 6} y={y(pro[pro.length - 1].v) + 3} fontSize="11" fill="#38bdf8">Pro</text>
+        <text x={W - PAD_R + 6} y={y(perso[perso.length - 1].v) + 3} fontSize="11" fill="#a78bfa">Perso</text>
+      </svg>
+      <p className="text-[11px] text-neutral-500 mt-1">Cumul des échéances « pas encore échues / à payer » entre aujourd'hui et J+3 mois (hors arriérés).</p>
+    </section>
+  );
+}
+
 // Bouton copier avec retour visuel (coche pendant 1,5 s).
 function CopyBtn({ value }: { value: string }) {
   const [ok, setOk] = useState(false);
@@ -439,6 +521,8 @@ export default function PrevisionnelView({ dest }: { dest?: string }) {
       {dest && <DestHeader lignes={lignes} />}
       {/* Infos de paiement du destinataire, au-dessus des filtres. */}
       {dest && <DestInfosPanel dest={dest} />}
+      {/* Vue générale : courbe des paiements à venir sur 3 mois. */}
+      {!dest && <PrevisionsChart lignes={lignes} />}
 
     <div className="flex flex-col md:flex-row gap-5 items-start">
       {/* ---- Panneau de filtres (gauche) ---- */}
