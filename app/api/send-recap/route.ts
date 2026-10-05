@@ -34,7 +34,8 @@ export async function POST(req: NextRequest) {
       const r = await fetch(RESEND_URL, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from, to: [RECIPIENT], subject: subject.trim(), html }),
+        // recap@ n'est pas une vraie boîte : les réponses repartent vers contact@.
+        body: JSON.stringify({ from, to: [RECIPIENT], reply_to: RECIPIENT, subject: subject.trim(), html }),
       });
       const data = await r.json().catch(() => ({}));
       if (r.ok) return NextResponse.json({ ok: true, id: data?.id, from });
